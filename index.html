@@ -1,0 +1,3050 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auditor de Faturas de Frete</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        .active-tab {
+            background-color: #eef2ff;
+            border-left: 4px solid #2563eb;
+            color: #2563eb;
+            font-weight: 600;
+        }
+        .sidebar-nav button {
+            border-left: 4px solid transparent;
+        }
+        /* Sidebar colapsável */
+        .app-container {
+            transition: all 0.3s ease;
+        }
+        .app-sidebar {
+            transition: width 0.3s ease, min-width 0.3s ease;
+        }
+        .app-sidebar.collapsed {
+            width: 64px;
+            min-width: 64px;
+        }
+        .app-sidebar.collapsed .sidebar-label {
+            display: none;
+        }
+        .app-sidebar.collapsed .sidebar-toggle-icon {
+            transform: rotate(180deg);
+        }
+        .app-sidebar.collapsed .sidebar-nav button {
+            justify-content: center;
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        .app-main {
+            transition: margin-left 0.3s ease, width 0.3s ease;
+            min-width: 0;
+        }
+        @media (max-width: 1023px) {
+            .app-sidebar.collapsed {
+                width: 100%;
+                min-width: 100%;
+            }
+            .app-sidebar.collapsed .sidebar-label {
+                display: inline;
+            }
+            .app-sidebar.collapsed .sidebar-nav button {
+                justify-content: flex-start;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 font-sans">
+
+    <header class="bg-indigo-900 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i data-lucide="truck" class="w-8 h-8 text-indigo-300"></i>
+                <h1 class="text-xl font-bold tracking-wide">Auditor & Conferente de Faturas de Frete</h1>
+            </div>
+            <span class="text-xs bg-indigo-800 text-indigo-200 px-3 py-1 rounded-full font-medium">Versão 3.9 (Frete Peso linha a linha + Conferência Pedágio/GRIS/Despacho)</span>
+        </div>
+    </header>
+
+    <div class="app-container mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6 items-start">
+
+        <aside id="app-sidebar" class="app-sidebar w-full lg:w-72 lg:shrink-0 lg:sticky lg:top-6">
+            <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div class="flex items-center justify-between px-4 py-2 border-b border-slate-200 bg-slate-50">
+                    <span class="sidebar-label text-xs font-bold text-slate-500 uppercase tracking-wider">Menu</span>
+                    <button onclick="toggleSidebar()" title="Ocultar/Exibir Menu" class="p-1.5 rounded hover:bg-slate-200 text-slate-600 transition">
+                        <i data-lucide="panel-left-close" class="sidebar-toggle-icon w-4 h-4 transition-transform"></i>
+                    </button>
+                </div>
+                <nav class="sidebar-nav flex flex-col">
+                <button onclick="switchTab('cadastro')" id="tab-cadastro" class="tab-btn active-tab w-full text-left px-4 py-3 border-b border-slate-100 flex items-center gap-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition" title="1. Cadastro de Tabelas / Regras por Cliente">
+                    <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-label">1. Cadastro de Tabelas / Regras por Cliente</span>
+                </button>
+                <button onclick="switchTab('auditoria')" id="tab-auditoria" class="tab-btn w-full text-left px-4 py-3 border-b border-slate-100 flex items-center gap-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition" title="2. Importação e Auditoria da Fatura">
+                    <i data-lucide="file-spreadsheet" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-label">2. Importação e Auditoria da Fatura</span>
+                </button>
+                <button onclick="switchTab('transformar')" id="tab-transformar" class="tab-btn w-full text-left px-4 py-3 border-b border-slate-100 flex items-center gap-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition" title="3. Importar e Transformar Dados">
+                    <i data-lucide="wand-2" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-label">3. Importar e Transformar Dados</span>
+                </button>
+                <button onclick="switchTab('historico')" id="tab-historico" class="tab-btn w-full text-left px-4 py-3 border-b border-slate-100 flex items-center gap-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition" title="4. Histórico & Pesquisas Futuras">
+                    <i data-lucide="archive" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-label">4. Histórico &amp; Pesquisas Futuras</span>
+                </button>
+                <button onclick="switchTab('fretes')" id="tab-fretes" class="tab-btn w-full text-left px-4 py-3 border-b border-slate-100 flex items-center gap-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition" title="5. Fretes vs Receitas">
+                    <i data-lucide="scale" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-label">5. Fretes vs Receitas</span>
+                </button>
+                </nav>
+            </div>
+        </aside>
+
+        <main id="app-main" class="app-main flex-1 min-w-0 w-full">
+
+        <div id="sec-cadastro" class="tab-content space-y-6">
+
+            <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-lg shadow-sm flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+                <div class="flex items-start gap-3 w-full xl:w-auto min-w-0">
+                    <i data-lucide="users" class="w-6 h-6 text-indigo-700 shrink-0 mt-0.5"></i>
+                    <div class="min-w-0 flex-1">
+                        <label class="block text-xs font-bold text-indigo-900 uppercase">Gerenciar Cliente / Tabela Ativa</label>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="relative">
+                                <i data-lucide="search" class="w-4 h-4 text-indigo-400 absolute left-2 top-1/2 -translate-y-1/2"></i>
+                                <input type="search" id="in-busca-cliente" oninput="filtrarClientesCadastro()" placeholder="Pesquisar tabela cadastrada..." class="pl-8 p-2 border border-indigo-300 rounded text-sm bg-white text-indigo-900 w-full md:w-56 focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <select id="sel-cliente-cadastro" onchange="trocarClienteCadastro()" class="p-2 border border-indigo-300 rounded font-semibold text-sm bg-white text-indigo-900 focus:ring-2 focus:ring-indigo-500">
+                            </select>
+                            <button onclick="deletarClienteAtual()" title="Deletar Tabela Selecionada" class="bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded border border-red-300 transition">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="exportarTabelasCadastradas()" title="Exportar tabelas cadastradas (.json)" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 p-2 rounded border border-emerald-300 transition">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="document.getElementById('in-importar-tabelas').click()" title="Importar tabelas cadastradas (.json)" class="bg-sky-100 hover:bg-sky-200 text-sky-700 p-2 rounded border border-sky-300 transition">
+                                <i data-lucide="upload" class="w-4 h-4"></i>
+                            </button>
+                            <input type="file" id="in-importar-tabelas" accept=".json,application/json" class="hidden" onchange="importarTabelasCadastradas(this)">
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                    <input type="text" id="in-novo-cliente" placeholder="Nome do Novo Cliente..." class="p-2 border text-sm rounded flex-1 min-w-[12rem] bg-white">
+                    <button onclick="criarNovoCliente()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded font-semibold flex items-center gap-1 transition whitespace-nowrap shadow">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> Criar Tabela Cliente
+                    </button>
+                </div>
+            </div>
+
+
+
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+                    <i data-lucide="database" class="w-5 h-5 text-indigo-600"></i>
+                    Opções de Tarifas Cadastradas para: <span id="lbl-cliente-atual" class="text-indigo-600 font-extrabold">Cliente Padrão</span>
+                </h2>
+                <p class="text-sm text-slate-500 mb-6">Cadastre ou edite as regras específicas para aplicar na auditoria de frete.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <h3 class="font-semibold text-slate-700 mb-3 border-b pb-2 flex justify-between">
+                            <span>Frete Peso (R$ / Kg)</span>
+                            <span class="text-xs text-indigo-600 font-bold" id="count-peso">0 opções</span>
+                        </h3>
+                        <div class="flex gap-2 mb-3">
+                            <input type="text" id="in-peso-nome" placeholder="Ex: Tabela Normal" class="w-1/2 p-2 border text-sm rounded">
+                            <input type="number" step="0.0001" id="in-peso-valor" placeholder="R$/Kg" class="w-1/2 p-2 border text-sm rounded">
+                        </div>
+                        <button onclick="addOpcao('peso')" class="w-full bg-indigo-600 text-white text-sm py-2 rounded hover:bg-indigo-700 font-medium transition">+ Adicionar Opção</button>
+                        <ul id="list-peso" class="mt-3 space-y-2 text-sm max-h-40 overflow-y-auto"></ul>
+                    </div>
+
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <h3 class="font-semibold text-slate-700 mb-3 border-b pb-2 flex justify-between">
+                            <span>Frete Mínimo (R$)</span>
+                            <span class="text-xs text-indigo-600 font-bold" id="count-minimo">0 opções</span>
+                        </h3>
+                        <div class="flex gap-2 mb-3">
+                            <input type="text" id="in-minimo-nome" placeholder="Ex: Mínimo R$ 122,71" class="w-1/2 p-2 border text-sm rounded">
+                            <input type="number" step="0.01" id="in-minimo-valor" placeholder="Valor R$" class="w-1/2 p-2 border text-sm rounded">
+                        </div>
+                        <button onclick="addOpcao('minimo')" class="w-full bg-indigo-600 text-white text-sm py-2 rounded hover:bg-indigo-700 font-medium transition">+ Adicionar Opção</button>
+                        <ul id="list-minimo" class="mt-3 space-y-2 text-sm max-h-40 overflow-y-auto"></ul>
+                    </div>
+
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <h3 class="font-semibold text-slate-700 mb-3 border-b pb-2 flex justify-between">
+                            <span>Frete Percentual (%)</span>
+                            <span class="text-xs text-indigo-600 font-bold" id="count-percentual">0 opções</span>
+                        </h3>
+                        <div class="flex gap-2 mb-3">
+                            <input type="text" id="in-percentual-nome" placeholder="Ex: Região Sul" class="w-1/2 p-2 border text-sm rounded">
+                            <input type="number" step="0.01" id="in-percentual-valor" placeholder="%" class="w-1/2 p-2 border text-sm rounded">
+                        </div>
+                        <button onclick="addOpcao('percentual')" class="w-full bg-indigo-600 text-white text-sm py-2 rounded hover:bg-indigo-700 font-medium transition">+ Adicionar Opção</button>
+                        <ul id="list-percentual" class="mt-3 space-y-2 text-sm max-h-40 overflow-y-auto"></ul>
+                    </div>
+
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <h3 class="font-semibold text-slate-700 mb-3 border-b pb-2 flex justify-between">
+                            <span>Pedágio (R$ / fração 100Kg)</span>
+                            <span class="text-xs text-indigo-600 font-bold" id="count-pedagio">0 opções</span>
+                        </h3>
+                        <div class="flex gap-2 mb-3">
+                            <input type="text" id="in-pedagio-nome" placeholder="Ex: Por 100Kg" class="w-1/2 p-2 border text-sm rounded">
+                            <input type="number" step="0.01" id="in-pedagio-valor" placeholder="Valor R$" class="w-1/2 p-2 border text-sm rounded">
+                        </div>
+                        <button onclick="addOpcao('pedagio')" class="w-full bg-indigo-600 text-white text-sm py-2 rounded hover:bg-indigo-700 font-medium transition">+ Adicionar Opção</button>
+                        <ul id="list-pedagio" class="mt-3 space-y-2 text-sm max-h-40 overflow-y-auto"></ul>
+                    </div>
+
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <h3 class="font-semibold text-slate-700 mb-3 border-b pb-2 flex justify-between">
+                            <span>GRIS (%)</span>
+                            <span class="text-xs text-indigo-600 font-bold" id="count-gris">0 opções</span>
+                        </h3>
+                        <div class="flex gap-2 mb-3">
+                            <input type="text" id="in-gris-nome" placeholder="Ex: Padrão GRIS" class="w-1/2 p-2 border text-sm rounded">
+                            <input type="number" step="0.01" id="in-gris-valor" placeholder="%" class="w-1/2 p-2 border text-sm rounded">
+                        </div>
+                        <button onclick="addOpcao('gris')" class="w-full bg-indigo-600 text-white text-sm py-2 rounded hover:bg-indigo-700 font-medium transition">+ Adicionar Opção</button>
+                        <ul id="list-gris" class="mt-3 space-y-2 text-sm max-h-40 overflow-y-auto"></ul>
+                    </div>
+
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <h3 class="font-semibold text-slate-700 mb-3 border-b pb-2 flex justify-between">
+                            <span>Despacho (R$)</span>
+                            <span class="text-xs text-indigo-600 font-bold" id="count-despacho">0 opções</span>
+                        </h3>
+                        <div class="flex gap-2 mb-3">
+                            <input type="text" id="in-despacho-nome" placeholder="Ex: Taxa Coleta" class="w-1/2 p-2 border text-sm rounded">
+                            <input type="number" step="0.01" id="in-despacho-valor" placeholder="Valor R$" class="w-1/2 p-2 border text-sm rounded">
+                        </div>
+                        <button onclick="addOpcao('despacho')" class="w-full bg-indigo-600 text-white text-sm py-2 rounded hover:bg-indigo-700 font-medium transition">+ Adicionar Opção</button>
+                        <ul id="list-despacho" class="mt-3 space-y-2 text-sm max-h-40 overflow-y-auto"></ul>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div id="sec-auditoria" class="tab-content hidden space-y-6">
+
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="upload-cloud" class="w-5 h-5 text-indigo-600"></i>
+                            Importar Planilha de Fatura e Tabelas (Fatura.xlsx)
+                        </h2>
+                        <p class="text-xs text-slate-500">Se houver a aba <strong>'tabela'</strong> no arquivo, as regras serão lidas e salvas automaticamente!</p>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row items-end sm:items-center gap-3">
+                        <div class="flex flex-col text-right sm:text-left">
+                            <label class="text-[11px] font-bold text-slate-600 uppercase">Modo de Importação:</label>
+                            <select id="sel-modo-importacao" class="p-1.5 text-xs border border-indigo-300 rounded bg-indigo-50 font-semibold text-indigo-900 focus:ring-2 focus:ring-indigo-500">
+                                <option value="substituir">Substituir Dados Anteriores</option>
+                                <option value="acumular" selected>Acumular com Registros Existentes</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <input type="file" id="file-input" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)">
+                            <button onclick="document.getElementById('file-input').click()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 transition shadow">
+                                <i data-lucide="file-up" class="w-4 h-4"></i>
+                                Carregar Planilha Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-emerald-50/70 p-4 rounded-lg border border-emerald-200 space-y-3">
+                    <div class="flex items-center gap-2 mb-1">
+                        <i data-lucide="user-plus" class="w-4 h-4 text-emerald-700"></i>
+                        <h3 class="font-bold text-emerald-900 text-sm">Incluir Parceiro (preenche a coluna PARCEIRO apenas nas células em branco dos dados filtrados)</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                        <div class="md:col-span-5">
+                            <label class="block text-[11px] font-bold text-emerald-900 mb-1">Incluir Parceiro:</label>
+                            <input type="text" id="in-incluir-parceiro" placeholder="Digite o nome do parceiro..." class="w-full p-2 border text-xs rounded bg-white border-emerald-300 font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                        <div class="md:col-span-4">
+                            <label class="block text-[11px] font-medium text-slate-600 mb-1">Aplicar em:</label>
+                            <div class="w-full p-2 border text-xs rounded bg-emerald-50 border-emerald-300 font-medium text-emerald-900">Somente filtrados com PARCEIRO em branco</div>
+                        </div>
+                        <div class="md:col-span-3 flex gap-2">
+                            <button onclick="salvarParceiroNaPlanilha()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded font-bold flex items-center justify-center gap-1.5 transition shadow whitespace-nowrap">
+                                <i data-lucide="save" class="w-4 h-4"></i> Salvar Parceiro
+                            </button>
+                            <button onclick="baixarPlanilhaComParceiro()" title="Baixar a planilha importada já com a coluna PARCEIRO atualizada" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-2 rounded font-bold flex items-center justify-center gap-1.5 transition border border-slate-300 whitespace-nowrap">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-emerald-800" id="msg-parceiro-salvo">O nome digitado é gravado na coluna <strong>PARCEIRO</strong> apenas dos registros que estão no filtro atual, e o recálculo é executado automaticamente.</p>
+                </div>
+
+                <div class="bg-amber-50/70 p-4 rounded-lg border border-amber-200 space-y-3">
+                    <div class="flex items-center gap-2 mb-1">
+                        <i data-lucide="percent" class="w-4 h-4 text-amber-700"></i>
+                        <h3 class="font-bold text-amber-900 text-sm">Opções de Abatimento, Dedução Percentual e Retirar Peso</h3>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                        <div class="md:col-span-3">
+                            <label class="flex items-center space-x-2 cursor-pointer bg-white p-2.5 rounded border border-amber-200">
+                                <input type="checkbox" id="chk-deduzir-imposto" checked onchange="recalcular()" class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+                                <span class="text-xs font-semibold text-slate-700">Retirar Percentual Antes do Cálculo %</span>
+                            </label>
+                        </div>
+
+                        <div class="md:col-span-3">
+                            <label class="block text-[11px] font-medium text-slate-600 mb-1">Qual percentual retirar?</label>
+                            <select id="sel-fonte-aliquota" onchange="toggleAliqInput(); recalcular();" class="w-full p-2 border text-xs rounded bg-white font-medium border-slate-300">
+                                <option value="coluna">Usar Coluna ALIQUOTA da Planilha (ex: ICMS)</option>
+                                <option value="fixa" selected>Usar Percentual Fixo Personalizado (%)</option>
+                            </select>
+                        </div>
+
+                        <div id="box-aliquota-fixa" class="md:col-span-3 flex gap-2">
+                            <div class="w-1/2">
+                                <label class="block text-[11px] font-medium text-slate-600 mb-1">Percentual 1 (%):</label>
+                                <input type="number" id="in-aliquota-fixa-1" value="7" step="0.1" oninput="recalcular()" class="w-full p-2 border text-xs rounded bg-white border-slate-300 font-bold text-indigo-700" placeholder="Ex: 7">
+                            </div>
+                            <div class="w-1/2">
+                                <label class="block text-[11px] font-medium text-slate-600 mb-1">Percentual 2 (%):</label>
+                                <input type="number" id="in-aliquota-fixa-2" value="12" step="0.1" oninput="recalcular()" class="w-full p-2 border text-xs rounded bg-white border-slate-300 font-bold text-indigo-700" placeholder="Ex: 12">
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-3">
+                            <label class="block text-[11px] font-bold text-indigo-900 mb-1">Retirar Peso (Kg):</label>
+                            <input type="number" id="in-retirar-peso" value="100" step="0.01" oninput="recalcular()" class="w-full p-2 border text-xs rounded bg-indigo-50 border-indigo-300 font-black text-indigo-900 focus:ring-2 focus:ring-indigo-500" placeholder="Digite o peso a subtrair...">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3 pt-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2">
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs font-bold text-slate-700 uppercase">Selecione o Cliente / Tabela:</label>
+                            <div class="relative">
+                                <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input type="search" id="in-busca-cliente-auditoria" oninput="filtrarClientesAuditoria()" placeholder="Pesquisar tabela cadastrada..." class="pl-7 p-1.5 border border-slate-300 rounded text-xs bg-white text-indigo-900 w-full sm:w-56 focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <select id="sel-cliente-auditoria" onchange="carregarRegrasClienteAuditoria(); recalcular();" class="p-1.5 border border-slate-300 rounded text-xs font-bold text-indigo-700 bg-slate-50">
+                            </select>
+                        </div>
+
+                        <button onclick="autoVerificarEAplicarRegras()" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3.5 py-2 rounded-lg font-bold flex items-center gap-1.5 transition shadow">
+                            <i data-lucide="wand-2" class="w-4 h-4"></i> Auto-Verificar Regras Cadastradas
+                        </button>
+                    </div>
+
+                    <div id="container-regras-estaticas" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200 shadow-inner">
+                        <span class="text-xs text-slate-400 italic col-span-full">Aguardando seleção do cliente...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="kpi-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 hidden">
+                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <span class="text-[11px] text-slate-500 font-bold uppercase">Total Registros Exibidos</span>
+                    <div class="text-2xl font-bold text-slate-800" id="kpi-total-ctrc">0</div>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <span class="text-[11px] text-indigo-600 font-bold uppercase">Frete Parceiro</span>
+                    <div class="text-base font-bold text-slate-800" id="kpi-frete-valor">R$ 0,00</div>
+                    <span class="text-[11px] text-slate-400 block" id="kpi-frete-valor-diff">Diff: R$ 0,00</span>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <span class="text-[11px] text-emerald-600 font-bold uppercase">Frete Claro (ORIGEM)</span>
+                    <div class="text-base font-bold text-slate-800" id="kpi-frete-peso">R$ 0,00</div>
+                    <span class="text-[11px] text-slate-400 block" id="kpi-frete-peso-diff">Diff: R$ 0,00</span>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <span class="text-[11px] text-blue-600 font-bold uppercase">Média Mês a Mês (Val Receber)</span>
+                    <div class="text-base font-bold text-blue-900" id="kpi-media-mensal">R$ 0,00</div>
+                    <span class="text-[11px] text-slate-400 block" id="kpi-media-mensal-sub">por mês com registros</span>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <span class="text-[11px] text-purple-600 font-bold uppercase">% Val Receber / Frete Origem</span>
+                    <div class="text-xl font-bold text-purple-900" id="kpi-percentual-proporcao">0.00 %</div>
+                    <span class="text-[11px] text-slate-400 block">Proporção relativa</span>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <span class="text-[11px] text-red-600 font-bold uppercase">Divergências</span>
+                    <div class="text-2xl font-bold text-red-600" id="kpi-divergencias">0</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3">
+                    <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+                        <div class="flex items-center gap-3">
+                            <h3 class="font-bold text-slate-700 flex items-center gap-2">
+                                <i data-lucide="check-square" class="w-4 h-4 text-emerald-600"></i>
+                                Resultado da Conferência e Auditoria
+                            </h3>
+                            <button onclick="limparDadosImportados()" id="btn-limpar-dados" class="hidden text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2.5 py-1 rounded font-semibold transition border border-red-200">
+                                Limpar Dados Acumulados
+                            </button>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                            <button onclick="salvarAuditoriaNoHistorico()" id="btn-salvar-historico" class="hidden bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3.5 py-2 rounded font-semibold flex items-center gap-1.5 transition whitespace-nowrap shadow">
+                                <i data-lucide="save" class="w-3.5 h-3.5"></i> Salvar no Histórico
+                            </button>
+
+                            <button onclick="exportarExcel()" id="btn-export" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3.5 py-2 rounded font-semibold flex items-center gap-1.5 transition whitespace-nowrap shadow">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i> Exportar (Excel)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                            <div class="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase">
+                                <i data-lucide="filter" class="w-4 h-4 text-indigo-600"></i>
+                                <span>Filtros Múltiplos e Pesquisa</span>
+                            </div>
+                            <button onclick="limparFiltrosMultiplos()" class="text-[11px] text-indigo-600 hover:underline font-semibold">Limpar Todos os Filtros</button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                            <div class="md:col-span-3">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Busca Textual (CTRC, Pedágio, GRIS, Despacho...):</label>
+                                <div class="relative">
+                                    <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2"></i>
+                                    <input type="text" id="in-filtro-busca-texto" oninput="filtrarTabela()" placeholder="Digite para pesquisar..." class="w-full pl-8 pr-3 py-1 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                            </div>
+
+                            <div class="md:col-span-3">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Filtrar por Nº CTRC (CTRC ORIGEM):</label>
+                                <div class="relative">
+                                    <i data-lucide="hash" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2"></i>
+                                    <input type="text" id="in-filtro-ctrc" oninput="filtrarTabela()" placeholder="Ex.: 12345 ou 12345, 67890" class="w-full pl-8 pr-3 py-1 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <p class="text-[10px] text-slate-400 mt-0.5">Separe vários CTRCs por vírgula, espaço ou ponto e vírgula.</p>
+                            </div>
+
+                            <div class="md:col-span-3">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Filtrar Parceiros (Múltipla Escolha):</label>
+                                <div id="container-filtro-parceiros" class="p-2 border border-slate-200 rounded max-h-24 overflow-y-auto bg-slate-50 text-xs space-y-1">
+                                    <span class="text-slate-400 text-[11px]">Nenhum parceiro carregado</span>
+                                </div>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status da Auditoria:</label>
+                                <div class="p-2 border border-slate-200 rounded max-h-24 overflow-y-auto bg-slate-50 text-xs space-y-1">
+                                    <label class="flex items-center space-x-1.5 cursor-pointer">
+                                        <input type="checkbox" value="FAT OK" checked onchange="filtrarTabela()" class="chk-filtro-status rounded text-indigo-600">
+                                        <span class="text-emerald-700 font-bold">FAT OK</span>
+                                    </label>
+                                    <label class="flex items-center space-x-1.5 cursor-pointer">
+                                        <input type="checkbox" value="DIVERGENTE" checked onchange="filtrarTabela()" class="chk-filtro-status rounded text-indigo-600">
+                                        <span class="text-red-700 font-bold">DIVERGENTE</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">É Frete Mínimo?</label>
+                                <div class="p-2 border border-slate-200 rounded max-h-24 overflow-y-auto bg-slate-50 text-xs space-y-1">
+                                    <label class="flex items-center space-x-1.5 cursor-pointer">
+                                        <input type="checkbox" value="Sim" checked onchange="filtrarTabela()" class="chk-filtro-minimo rounded text-indigo-600">
+                                        <span>Sim</span>
+                                    </label>
+                                    <label class="flex items-center space-x-1.5 cursor-pointer">
+                                        <input type="checkbox" value="Não" checked onchange="filtrarTabela()" class="chk-filtro-minimo rounded text-indigo-600">
+                                        <span>Não</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Pedágio / GRIS / Despacho:</label>
+                                <div class="p-2 border border-slate-200 rounded max-h-24 overflow-y-auto bg-slate-50 text-xs space-y-1">
+                                    <label class="flex items-center space-x-1.5 cursor-pointer">
+                                        <input type="checkbox" value="OK" checked onchange="filtrarTabela()" class="chk-filtro-conf rounded text-indigo-600">
+                                        <span class="text-emerald-700 font-bold">OK</span>
+                                    </label>
+                                    <label class="flex items-center space-x-1.5 cursor-pointer">
+                                        <input type="checkbox" value="DIVERGENTE" checked onchange="filtrarTabela()" class="chk-filtro-conf rounded text-indigo-600">
+                                        <span class="text-red-700 font-bold">DIVERGENTE</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                    <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                            <div class="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase">
+                                <i data-lucide="columns" class="w-4 h-4 text-indigo-600"></i>
+                                <span>Ocultar / Exibir Colunas</span>
+                            </div>
+                            <button onclick="exibirTodasColunasAuditoria()" class="text-[11px] text-indigo-600 hover:underline font-semibold">Exibir Todas as Colunas</button>
+                        </div>
+                        <div id="container-colunas-auditoria" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-1.5 max-h-32 overflow-y-auto text-[11px]"></div>
+                    </div>
+
+                <div class="overflow-x-auto shadow rounded-lg border border-slate-200">
+                    <table id="tabela-auditoria" class="w-full text-xs text-left text-slate-600 border-collapse">
+                        <thead class="bg-slate-100 text-slate-600 uppercase text-[10px] tracking-wider border-b">
+                            <tr>
+                                <th class="p-3 border-r">Nº CTRC</th>
+                                <th class="p-3 border-r bg-slate-200/80 text-slate-900 font-bold">Nº Fatura</th>
+                                <th class="p-3 border-r bg-indigo-50/80 text-indigo-950 font-bold">Parceiro</th>
+                                <th class="p-3 border-r">Vlr Frete Origem (Bruto)</th>
+                                <th class="p-3 border-r bg-amber-100/60 text-amber-900 font-bold">Dedução 1 / Total (%)</th>
+                                <th class="p-3 border-r bg-amber-100/60 text-amber-900 font-bold">Dedução 2 (%)</th>
+                                <th class="p-3 border-r bg-amber-200/70 text-amber-950 font-black">Base Líquida Calc</th>
+                                <th class="p-3 border-r font-bold text-indigo-900 bg-indigo-50/80">Val Receber (Planilha)</th>
+                                <th class="p-3 border-r font-bold text-sky-900 bg-sky-100/70">Frete Valor (Planilha)</th>
+                                <th class="p-3 border-r bg-teal-100/70 text-teal-900 font-black">Frete % Calc c/ ICMS</th>
+                                <th class="p-3 border-r bg-blue-100/70 text-blue-900 font-black">Frete % Calc (Ded 1)</th>
+                                <th class="p-3 border-r bg-purple-100/70 text-purple-900 font-black">Frete % Calc (Ded 2)</th>
+                                <th class="p-3 border-r">Frete Peso (Planilha)</th>
+                                <th class="p-3 border-r bg-emerald-100/70 text-emerald-900 font-black">Frete Peso Calc</th>
+                                <th class="p-3 border-r bg-indigo-200/80 text-indigo-950 font-black">Frete Calc (c/ Retirar Peso)</th>
+                                <th class="p-3 border-r bg-indigo-100/70 text-indigo-900 font-black text-center">É Mínimo Cadastrado?</th>
+                                <th class="p-3 text-center min-w-[130px] whitespace-nowrap">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-tbody" class="divide-y divide-slate-200 text-slate-700">
+                            <tr>
+                                <td colspan="17" class="text-center py-8 text-slate-400">Nenhum dado carregado. Por favor, importe o arquivo Fatura.xlsx.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- NOVA TABELA: Conferência de Pedágio, GRIS e Despacho -->
+            <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 bg-slate-50 border-b border-slate-200">
+                    <h3 class="font-bold text-slate-700 flex items-center gap-2">
+                        <i data-lucide="clipboard-check" class="w-4 h-4 text-indigo-600"></i>
+                        Conferência de Pedágio, GRIS e Despacho (Calculado vs Planilha)
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-1">
+                        <strong>PED CALC</strong> = frações de 100Kg (arredondadas p/ cima) × valor cadastrado de Pedágio ·
+                        <strong>GRIS CALC</strong> = Val Mercadoria × (% GRIS cadastrado / 100) ·
+                        <strong>DESP CALC</strong> = valor cadastrado de Despacho. Resultado = OK apenas se os três baterem.
+                    </p>
+                </div>
+                <div class="overflow-x-auto shadow rounded-lg border border-slate-200">
+                    <table class="w-full text-xs text-left text-slate-600 border-collapse">
+                        <thead class="bg-slate-100 text-slate-600 uppercase text-[10px] tracking-wider border-b">
+                            <tr>
+                                <th class="p-3 border-r">Nº CTRC</th>
+                                <th class="p-3 border-r">Pedágio (Planilha)</th>
+                                <th class="p-3 border-r">Peso Calc (Planilha)</th>
+                                <th class="p-3 border-r">Val Mercadoria (Planilha)</th>
+                                <th class="p-3 border-r">GRIS (Planilha)</th>
+                                <th class="p-3 border-r">Despacho (Planilha)</th>
+                                <th class="p-3 border-r bg-emerald-100/70 text-emerald-900 font-black">PED CALC</th>
+                                <th class="p-3 border-r bg-amber-100/70 text-amber-900 font-black">GRIS CALC</th>
+                                <th class="p-3 border-r bg-sky-100/70 text-sky-900 font-black">DESP CALC</th>
+                                <th class="p-3 text-center min-w-[120px] whitespace-nowrap">Resultado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-extras-tbody" class="divide-y divide-slate-200 text-slate-700">
+                            <tr>
+                                <td colspan="10" class="text-center py-8 text-slate-400">Nenhum dado carregado. Por favor, importe o arquivo Fatura.xlsx.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="sec-transformar" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="wand-2" class="w-5 h-5 text-indigo-600"></i>
+                            Importar e Transformar Dados
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">
+                            Limpeza automatica: remove as linhas cuja coluna A contenha <strong>0</strong> ou <strong>9</strong>,
+                            mantem a linha de cabecalho (coluna A = <strong>1</strong>) somente do primeiro arquivo importado,
+                            e cria o cabecalho <strong>PARCEIRO</strong> na coluna <strong>DQ</strong>.
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <input type="file" id="file-transformar" accept=".xlsx, .xls, .csv" multiple class="hidden" onchange="handleTransformUpload(event)">
+                        <button onclick="document.getElementById('file-transformar').click()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 transition shadow">
+                            <i data-lucide="file-up" class="w-4 h-4"></i>
+                            Selecionar Arquivos (.csv / .xlsx)
+                        </button>
+                        <button onclick="limparArquivosTransformados()" id="btn-limpar-transf" class="hidden bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 transition">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            Limpar Arquivos Importados
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 border border-slate-200 rounded-lg p-4">
+                    <div class="flex flex-col">
+                        <label class="text-[11px] font-bold text-slate-600 uppercase">Remover linhas com coluna A =</label>
+                        <input type="text" id="in-transf-remover" value="0,9" class="p-1.5 text-xs border border-slate-300 rounded">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[11px] font-bold text-slate-600 uppercase">Linha de cabecalho (coluna A =)</label>
+                        <input type="text" id="in-transf-cabecalho" value="1" class="p-1.5 text-xs border border-slate-300 rounded">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[11px] font-bold text-slate-600 uppercase">Coluna do cabecalho PARCEIRO</label>
+                        <input type="text" id="in-transf-coluna-parceiro" value="DQ" class="p-1.5 text-xs border border-slate-300 rounded">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[11px] font-bold text-slate-600 uppercase">Nome do arquivo de saida</label>
+                        <input type="text" id="in-transf-nome-saida" value="Dados_Transformados.xlsx" class="p-1.5 text-xs border border-slate-300 rounded">
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <button onclick="escolherPastaDestino()" class="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2">
+                        <i data-lucide="folder" class="w-4 h-4"></i>
+                        Escolher Pasta de Destino
+                    </button>
+                    <span id="lbl-pasta-destino" class="text-xs text-slate-500">Nenhuma pasta escolhida (o arquivo sera baixado na pasta de downloads).</span>
+                    <div class="flex-1"></div>
+                    <button onclick="salvarDadosTransformados('xlsx')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                        Salvar XLSX
+                    </button>
+                    <button onclick="salvarDadosTransformados('csv')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                        Salvar CSV
+                    </button>
+                </div>
+
+                <div id="transf-arquivos" class="text-xs text-slate-500"></div>
+                <div id="transf-resumo" class="text-xs text-slate-600"></div>
+
+                <div class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg">
+                    <table id="tabela-transformar" class="w-full text-left text-[11px] border-collapse whitespace-nowrap">
+                        <thead class="bg-slate-100 text-slate-600 uppercase text-[10px] tracking-wider border-b sticky top-0 z-10"></thead>
+                        <tbody id="transf-tbody" class="divide-y divide-slate-200 text-slate-700">
+                            <tr><td class="text-center py-8 text-slate-400">Nenhum arquivo importado ainda.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="sec-historico" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="archive" class="w-5 h-5 text-indigo-600"></i>
+                            Banco de Dados de Auditorias Salvas (Pesquisas Futuras)
+                        </h2>
+                        <p class="text-xs text-slate-500">Consulte auditorias gravadas anteriormente para acompanhamento ou relatórios fiscais.</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+                        <div class="relative w-full md:w-72">
+                            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5"></i>
+                            <input type="text" id="in-filtro-historico" oninput="renderHistorico()" placeholder="Buscar por Nome, CTRC, Data ou Nº Fatura..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="exportarBancoHistorico()" title="Exportar o Banco de Dados de Auditorias Salvas (.json)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i> Exportar Banco
+                            </button>
+                            <button onclick="document.getElementById('in-import-historico').click()" title="Importar Banco de Dados de Auditorias Salvas (.json)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                                <i data-lucide="upload" class="w-3.5 h-3.5"></i> Importar Banco
+                            </button>
+                            <input type="file" id="in-import-historico" accept=".json,application/json" class="hidden" onchange="importarBancoHistorico(event)">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead class="bg-slate-100 text-slate-600 uppercase text-[10px] tracking-wider border-b">
+                            <tr>
+                                <th class="p-3 border-r">Data / Hora</th>
+                                <th class="p-3 border-r">Referência / Nome Lote</th>
+                                <th class="p-3 border-r">Cliente</th>
+                                <th class="p-3 border-r">NUMERO FATURA</th>
+                                <th class="p-3 border-r text-center">Qtd CTRCs</th>
+                                <th class="p-3 border-r text-center">Divergências</th>
+                                <th class="p-3 border-r">Total Frete Origem (VAL RECEBER)</th>
+                                <th class="p-3 text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hist-tbody" class="divide-y divide-slate-200 text-slate-700">
+                            <tr>
+                                <td colspan="8" class="text-center py-8 text-slate-400">Nenhum registro gravado no histórico até o momento.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- NOVA GUIA: Fretes vs Receitas -->
+        <div id="sec-fretes" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 bg-slate-50 border-b border-slate-200">
+                    <h3 class="font-bold text-slate-700 flex items-center gap-2">
+                        <i data-lucide="scale" class="w-4 h-4 text-indigo-600"></i>
+                        Fretes vs Receitas — Comparativo Claro x Parceiro
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-1">
+                        <strong>SALDO$</strong> = Frete Claro − Frete Parceiro. Linhas com saldo negativo (parceiro recebe mais que o frete Claro) ficam destacadas em <span class="text-red-700 font-bold">vermelho</span>.
+                        Alertas em <span class="text-amber-700 font-bold">âmbar</span> quando TDE Claro &lt; TDE Parceiro ou TDA Claro &lt; TDA Parceiro.
+                    </p>
+                </div>
+                <div class="p-4 border-b border-slate-200 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                        <span class="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">% Frete Parceiro / Frete Claro</span>
+                        <div class="text-2xl font-bold text-indigo-900 mt-1" id="card-pct-parceiro-claro">0,00 %</div>
+                        <span class="text-[11px] text-slate-500 block" id="card-pct-parceiro-claro-sub">Frete Parceiro R$ 0,00 / Frete Claro R$ 0,00</span>
+                    </div>
+                </div>
+                <div id="barra-filtro-grafico" class="hidden px-4 pt-3">
+                    <div class="flex items-center gap-2 text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded-lg px-3 py-2">
+                        <i data-lucide="filter" class="w-4 h-4"></i>
+                        <span>Filtro do gráfico: <strong id="rotulo-filtro-grafico"></strong> — <span id="contagem-filtro-grafico"></span></span>
+                        <button onclick="limparFiltroGrafico()" class="ml-auto bg-amber-600 text-white px-2 py-1 rounded font-semibold hover:bg-amber-700 transition">Limpar filtro</button>
+                    </div>
+                </div>
+                <div class="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4 border-b border-slate-200 bg-white">
+                    <div class="border border-slate-200 rounded-lg p-3">
+                        <div class="flex items-start justify-between gap-2 mb-2">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase">Frete Total — Claro vs Parceiro</h4>
+                            <button type="button" onclick="expandirGrafico('chart-frete-total')" title="Expandir gráfico" class="text-slate-500 hover:text-indigo-600 transition shrink-0">
+                                <i data-lucide="maximize-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <div class="h-56"><canvas id="chart-frete-total"></canvas></div>
+                    </div>
+                    <div class="border border-slate-200 rounded-lg p-3">
+                        <div class="flex items-start justify-between gap-2 mb-2">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase">TDE / TDA vs Resultado Final</h4>
+                            <button type="button" onclick="expandirGrafico('chart-tde-tda')" title="Expandir gráfico" class="text-slate-500 hover:text-indigo-600 transition shrink-0">
+                                <i data-lucide="maximize-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <div class="h-56"><canvas id="chart-tde-tda"></canvas></div>
+                        <p class="text-[10px] text-slate-500 mt-1" id="nota-tde-tda"></p>
+                    </div>
+                    <div class="border border-slate-200 rounded-lg p-3">
+                        <div class="flex items-start justify-between gap-2 mb-2">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase">Saldo — Positivo vs Negativo</h4>
+                            <button type="button" onclick="expandirGrafico('chart-saldo')" title="Expandir gráfico" class="text-slate-500 hover:text-indigo-600 transition shrink-0">
+                                <i data-lucide="maximize-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <div class="h-56"><canvas id="chart-saldo"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto shadow rounded-lg border border-slate-200">
+                    <table class="w-full text-xs text-left text-slate-600 border-collapse">
+                        <thead class="bg-slate-100 text-slate-600 uppercase text-[10px] tracking-wider border-b">
+                            <tr>
+                                <th class="p-3 border-r">Nº CTRC</th>
+                                <th class="p-3 border-r font-bold text-emerald-900 bg-emerald-50/60">Frete Claro</th>
+                                <th class="p-3 border-r font-bold text-indigo-900 bg-indigo-50/60">Frete Parceiro</th>
+                                <th class="p-3 border-r">TDE Claro</th>
+                                <th class="p-3 border-r">TDA Claro</th>
+                                <th class="p-3 border-r">TDE Parceiro</th>
+                                <th class="p-3 border-r">TDA Parceiro</th>
+                                <th class="p-3 border-r font-black text-indigo-950 bg-indigo-100/70">Saldo$</th>
+                                <th class="p-3 text-center min-w-[160px] whitespace-nowrap">Resultado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fretes-tbody" class="divide-y divide-slate-200 text-slate-700">
+                            <tr>
+                                <td colspan="9" class="text-center py-8 text-slate-400">Nenhum dado carregado. Importe a planilha na aba de Auditoria.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    </div>
+
+    <script>
+        // --- ESTRUTURAS DE DADOS LOCAIS ---
+        let tabelasClientes = {
+            "Cliente Padrão": {
+                peso: [
+                    { id: 1, nome: "Tabela Padrão", valor: 0.80 },
+                    { id: 2, nome: "Tabela Especial", valor: 1.12 }
+                ],
+                minimo: [
+                    { id: 1, nome: "Mínimo Padrão", valor: 35.00 },
+                    { id: 2, nome: "Mínimo Especial", valor: 122.71 }
+                ],
+                percentual: [{ id: 1, nome: "Percentual Sul (2.5%)", valor: 2.50 }],
+                pedagio: [{ id: 1, nome: "Pedágio Fixo (R$ 15,00)", valor: 15.00 }],
+                gris: [{ id: 1, nome: "GRIS Padrão (0.15%)", valor: 0.15 }],
+                despacho: [{ id: 1, nome: "Despacho Fixo (R$ 10,00)", valor: 10.00 }]
+            }
+        };
+
+        let clienteAtualCadastro = "Cliente Padrão";
+        let rawExcelData = [];
+        let auditResults = [];
+        let historicoAuditorias = [];
+        let resultadosFiltradosAtuais = [];
+        let graficosFretes = {};
+        let configsGraficosFretes = {};
+        let graficoExpandido = null;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            carregarStorageLocal();
+            atualizarDropdownsClientes();
+            renderCadastros();
+            toggleAliqInput();
+            renderHistorico();
+            montarControleColunasAuditoria();
+            const parceiroSalvo = localStorage.getItem('auditor_parceiro_incluido');
+            if (parceiroSalvo) document.getElementById('in-incluir-parceiro').value = parceiroSalvo;
+            lucide.createIcons();
+        });
+
+        function carregarStorageLocal() {
+            const histSaved = localStorage.getItem('auditor_historico');
+            if (histSaved) {
+                try { historicoAuditorias = JSON.parse(histSaved); } catch (e) {}
+            }
+            const tabSaved = localStorage.getItem('auditor_tabelas');
+            if (tabSaved) {
+                try { tabelasClientes = JSON.parse(tabSaved); } catch (e) {}
+            }
+        }
+
+        function salvarTabelasLocal() {
+            localStorage.setItem('auditor_tabelas', JSON.stringify(tabelasClientes));
+        }
+
+        function salvarHistoricoLocal() {
+            localStorage.setItem('auditor_historico', JSON.stringify(historicoAuditorias));
+        }
+
+        // ===== EXPORTAR / IMPORTAR BANCO DE DADOS DE AUDITORIAS SALVAS =====
+        function exportarBancoHistorico() {
+            if (!historicoAuditorias || historicoAuditorias.length === 0) {
+                alert('Não há auditorias salvas para exportar.');
+                return;
+            }
+            const pacote = {
+                tipo: 'auditor-banco-historico',
+                versao: 1,
+                exportadoEm: new Date().toISOString(),
+                total: historicoAuditorias.length,
+                historico: historicoAuditorias
+            };
+            const blob = new Blob([JSON.stringify(pacote, null, 2)], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const carimbo = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            a.href = url;
+            a.download = `Banco_Auditorias_${carimbo}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importarBancoHistorico(event) {
+            const arquivo = (event.target.files || [])[0];
+            if (!arquivo) return;
+            const leitor = new FileReader();
+            leitor.onload = () => {
+                let dados;
+                try { dados = JSON.parse(String(leitor.result || '')); }
+                catch (e) { alert('Arquivo inválido: não foi possível ler o JSON.'); event.target.value = ''; return; }
+
+                const lista = Array.isArray(dados) ? dados : (Array.isArray(dados.historico) ? dados.historico : null);
+                if (!lista) { alert('Arquivo inválido: não contém um banco de auditorias.'); event.target.value = ''; return; }
+
+                const substituir = historicoAuditorias.length > 0
+                    ? confirm(`Foram encontradas ${lista.length} auditoria(s) no arquivo.\n\nOK = SUBSTITUIR o banco atual (${historicoAuditorias.length} registro(s)).\nCancelar = MESCLAR com o banco atual (ignora duplicados).`)
+                    : true;
+
+                if (substituir) {
+                    historicoAuditorias = lista;
+                } else {
+                    const existentes = new Set(historicoAuditorias.map(h => String(h.id)));
+                    let novos = 0;
+                    lista.forEach(item => {
+                        const chave = String(item.id ?? '');
+                        if (chave && existentes.has(chave)) return;
+                        existentes.add(chave);
+                        historicoAuditorias.unshift(item);
+                        novos++;
+                    });
+                    alert(`${novos} auditoria(s) importada(s). ${lista.length - novos} duplicada(s) ignorada(s).`);
+                }
+
+                salvarHistoricoLocal();
+                renderHistorico();
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                event.target.value = '';
+            };
+            leitor.readAsText(arquivo, 'utf-8');
+        }
+
+        async function salvarAuditoriaNoGoogleSheets() {
+            if (!auditResults || auditResults.length === 0) return;
+            const webAppUrl = "https://script.google.com/macros/s/AKfycby1K3bTCAMOcsejf13i-XZm9Wwr9PG5CLKY_2OVULu97E8t4nbjv27BpRHk0yKuvmWBwg/exec";
+            const payloadData = auditResults.map(r => ({
+                ctrc: r.ctrc,
+                numeroFatura: r.numeroFatura || '',
+                parceiro: r.parceiro,
+                vlrFreteOrigem: r.vlrFreteOrigem,
+                freteValorPlanilha: r.freteValorPlanilha,
+                statusText: r.statusText
+            }));
+
+            try {
+                await fetch(webAppUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payloadData)
+                });
+            } catch (error) {
+                console.error("Erro ao conectar com a planilha:", error);
+            }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('app-sidebar');
+            sidebar.classList.toggle('collapsed');
+            const collapsed = sidebar.classList.contains('collapsed');
+            localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+            lucide.createIcons();
+        }
+
+        function initSidebar() {
+            const sidebar = document.getElementById('app-sidebar');
+            if (localStorage.getItem('sidebarCollapsed') === '1') {
+                sidebar.classList.add('collapsed');
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active-tab'));
+            document.querySelectorAll('.tab-content').forEach(sec => sec.classList.add('hidden'));
+
+            document.getElementById(`tab-${tabId}`).classList.add('active-tab');
+            document.getElementById(`sec-${tabId}`).classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function toggleAliqInput() {
+            const fonte = document.getElementById('sel-fonte-aliquota').value;
+            const boxFixa = document.getElementById('box-aliquota-fixa');
+            if (fonte === 'fixa') {
+                boxFixa.classList.remove('hidden');
+            } else {
+                boxFixa.classList.add('hidden');
+            }
+        }
+
+        function filtrarClientesCadastro() {
+            const inBusca = document.getElementById('in-busca-cliente');
+            const termo = inBusca ? inBusca.value.trim().toLowerCase() : '';
+            const selCad = document.getElementById('sel-cliente-cadastro');
+            if (!selCad) return;
+            selCad.innerHTML = '';
+
+            const todos = Object.keys(tabelasClientes);
+            const filtrados = termo ? todos.filter(cli => cli.toLowerCase().includes(termo)) : todos;
+
+            if (filtrados.length === 0) {
+                const optVazio = document.createElement('option');
+                optVazio.value = '';
+                optVazio.textContent = 'Nenhuma tabela encontrada';
+                optVazio.disabled = true;
+                selCad.appendChild(optVazio);
+                return;
+            }
+
+            filtrados.forEach(cli => {
+                const opt = document.createElement('option');
+                opt.value = cli;
+                opt.textContent = cli;
+                selCad.appendChild(opt);
+            });
+
+            selCad.value = filtrados.includes(clienteAtualCadastro) ? clienteAtualCadastro : filtrados[0];
+            if (selCad.value && selCad.value !== clienteAtualCadastro) trocarClienteCadastro();
+        }
+
+
+        function filtrarClientesAuditoria(manterSelecao) {
+            const selAud = document.getElementById('sel-cliente-auditoria');
+            if (!selAud) return;
+            const inBusca = document.getElementById('in-busca-cliente-auditoria');
+            const termo = inBusca ? inBusca.value.trim().toLowerCase() : '';
+            const anterior = manterSelecao || selAud.value;
+            selAud.innerHTML = '';
+
+            const todos = Object.keys(tabelasClientes);
+            const filtrados = termo ? todos.filter(cli => cli.toLowerCase().includes(termo)) : todos;
+
+            if (filtrados.length === 0) {
+                const optVazio = document.createElement('option');
+                optVazio.value = '';
+                optVazio.textContent = 'Nenhuma tabela encontrada';
+                optVazio.disabled = true;
+                selAud.appendChild(optVazio);
+                return;
+            }
+
+            filtrados.forEach(cli => {
+                const opt = document.createElement('option');
+                opt.value = cli;
+                opt.textContent = cli;
+                selAud.appendChild(opt);
+            });
+
+            selAud.value = filtrados.includes(anterior) ? anterior : filtrados[0];
+        }
+
+        function selecionarClienteAuditoria(nome) {
+            const inBusca = document.getElementById('in-busca-cliente-auditoria');
+            if (inBusca) inBusca.value = '';
+            filtrarClientesAuditoria(nome);
+        }
+
+        function atualizarDropdownsClientes() {
+            filtrarClientesAuditoria();
+            filtrarClientesCadastro();
+        }
+
+        function exportarTabelasCadastradas() {
+            const nomes = Object.keys(tabelasClientes);
+            if (!nomes.length) { alert("Não há tabelas cadastradas para exportar."); return; }
+            const payload = {
+                app: "Auditoria de Faturas",
+                tipo: "tabelas-clientes",
+                versao: 1,
+                exportadoEm: new Date().toISOString(),
+                tabelas: tabelasClientes
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const d = new Date();
+            const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+            a.href = url;
+            a.download = `tabelas_clientes_${stamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importarTabelasCadastradas(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const dados = JSON.parse(e.target.result);
+                    const importadas = dados && dados.tabelas ? dados.tabelas : dados;
+                    if (!importadas || typeof importadas !== 'object' || Array.isArray(importadas)) {
+                        throw new Error("Formato inválido");
+                    }
+                    const tipos = ['peso', 'minimo', 'percentual', 'pedagio', 'gris', 'despacho'];
+                    const nomes = Object.keys(importadas);
+                    if (!nomes.length) throw new Error("Arquivo sem tabelas");
+
+                    const substituir = confirm(
+                        `Foram encontradas ${nomes.length} tabela(s) no arquivo.\n\n` +
+                        `OK = SUBSTITUIR todas as tabelas atuais\n` +
+                        `Cancelar = MESCLAR com as tabelas existentes (as de mesmo nome serão atualizadas)`
+                    );
+
+                    const normalizadas = {};
+                    nomes.forEach(nome => {
+                        const orig = importadas[nome] || {};
+                        const limpo = {};
+                        tipos.forEach(t => {
+                            limpo[t] = Array.isArray(orig[t]) ? orig[t].map((r, i) => ({
+                                id: r.id || (i + 1),
+                                nome: String(r.nome ?? ''),
+                                valor: Number(r.valor) || 0
+                            })) : [];
+                        });
+                        normalizadas[nome] = limpo;
+                    });
+
+                    if (substituir) {
+                        tabelasClientes = normalizadas;
+                    } else {
+                        Object.keys(normalizadas).forEach(n => { tabelasClientes[n] = normalizadas[n]; });
+                    }
+
+                    const primeiro = Object.keys(tabelasClientes)[0];
+                    if (!tabelasClientes[clienteAtualCadastro]) clienteAtualCadastro = primeiro;
+
+                    salvarTabelasLocal();
+                    const buscaCad = document.getElementById('in-busca-cliente');
+                    if (buscaCad) buscaCad.value = '';
+                    atualizarDropdownsClientes();
+                    trocarClienteCadastro();
+                    if (typeof carregarRegrasClienteAuditoria === 'function') carregarRegrasClienteAuditoria();
+                    alert(`Importação concluída! ${nomes.length} tabela(s) ${substituir ? 'substituíram' : 'foram mescladas com'} as anteriores.`);
+                } catch (err) {
+                    alert("Não foi possível importar o arquivo. Verifique se é um JSON exportado por este sistema.\n\nDetalhe: " + err.message);
+                } finally {
+                    input.value = '';
+                }
+            };
+            reader.readAsText(file, 'utf-8');
+        }
+
+
+
+        function criarNovoCliente() {
+            const input = document.getElementById('in-novo-cliente');
+            const nome = input.value.trim();
+            if (!nome) {
+                alert("Por favor, digite o nome do cliente!");
+                return;
+            }
+            if (tabelasClientes[nome]) {
+                alert("Já existe uma tabela com este nome de cliente!");
+                return;
+            }
+            tabelasClientes[nome] = { peso: [], minimo: [], percentual: [], pedagio: [], gris: [], despacho: [] };
+            input.value = '';
+            salvarTabelasLocal();
+            atualizarDropdownsClientes();
+            trocarClienteCadastro();
+        }
+
+        function deletarClienteAtual() {
+            const clienteParaDeletar = document.getElementById('sel-cliente-cadastro').value;
+            if (Object.keys(tabelasClientes).length <= 1) {
+                alert("Você precisa manter ao menos uma tabela cadastrada no sistema!");
+                return;
+            }
+            if (confirm(`Tem certeza que deseja excluir permanentemente a tabela do cliente "${clienteParaDeletar}"?`)) {
+                delete tabelasClientes[clienteParaDeletar];
+                salvarTabelasLocal();
+                atualizarDropdownsClientes();
+                trocarClienteCadastro();
+            }
+        }
+
+        function trocarClienteCadastro() {
+            clienteAtualCadastro = document.getElementById('sel-cliente-cadastro').value;
+            document.getElementById('lbl-cliente-atual').textContent = clienteAtualCadastro;
+            renderCadastros();
+        }
+
+        function carregarRegrasClienteAuditoria() {
+            const clienteAuditoria = document.getElementById('sel-cliente-auditoria').value;
+            const cadastrosCliente = tabelasClientes[clienteAuditoria];
+            const container = document.getElementById('container-regras-estaticas');
+            if (!container) return;
+
+            if (!cadastrosCliente) {
+                container.innerHTML = '<span class="text-xs text-slate-400 italic col-span-full">Nenhuma regra encontrada para este cliente.</span>';
+                return;
+            }
+
+            const tipos = [
+                { id: 'peso', label: 'Frete Peso', suf: 'R$' },
+                { id: 'minimo', label: 'Frete Mínimo', suf: 'R$' },
+                { id: 'percentual', label: 'Frete %', suf: '%' },
+                { id: 'pedagio', label: 'Pedágio', suf: 'R$' },
+                { id: 'gris', label: 'GRIS', suf: '%' },
+                { id: 'despacho', label: 'Despacho', suf: 'R$' }
+            ];
+
+            let html = '';
+            tipos.forEach(t => {
+                const regras = cadastrosCliente[t.id] || [];
+                let listaHtml = regras.length > 0
+                    ? regras.map(r => `<div class="text-[10px] bg-white border border-slate-200 p-1.5 mb-1 rounded text-indigo-700 font-bold shadow-sm">${r.nome}: ${r.valor} ${t.suf}</div>`).join('')
+                    : `<div class="text-[11px] text-slate-400 italic">Nenhuma cadastrada</div>`;
+
+                html += `
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">${t.label}</label>
+                    <div class="max-h-24 overflow-y-auto pr-1">
+                        ${listaHtml}
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function addOpcao(tipo) {
+            const nomeInput = document.getElementById(`in-${tipo}-nome`);
+            const valorInput = document.getElementById(`in-${tipo}-valor`);
+            const nome = nomeInput.value.trim();
+            const valor = parseFloat(valorInput.value);
+
+            if (!nome || isNaN(valor)) {
+                alert("Preencha o nome e um valor válido!");
+                return;
+            }
+
+            if (!tabelasClientes[clienteAtualCadastro]) {
+                tabelasClientes[clienteAtualCadastro] = { peso: [], minimo: [], percentual: [], pedagio: [], gris: [], despacho: [] };
+            }
+
+            tabelasClientes[clienteAtualCadastro][tipo].push({
+                id: Date.now(),
+                nome: nome,
+                valor: valor
+            });
+
+            nomeInput.value = '';
+            valorInput.value = '';
+            salvarTabelasLocal();
+            renderCadastros();
+        }
+
+        function removeOpcao(tipo, id) {
+            if (tabelasClientes[clienteAtualCadastro] && tabelasClientes[clienteAtualCadastro][tipo]) {
+                tabelasClientes[clienteAtualCadastro][tipo] = tabelasClientes[clienteAtualCadastro][tipo].filter(item => item.id !== id);
+                salvarTabelasLocal();
+                renderCadastros();
+            }
+        }
+
+        function renderCadastros() {
+            const tipos = ['peso', 'minimo', 'percentual', 'pedagio', 'gris', 'despacho'];
+            const cadastros = tabelasClientes[clienteAtualCadastro] || {};
+
+            tipos.forEach(tipo => {
+                const listEl = document.getElementById(`list-${tipo}`);
+                const countEl = document.getElementById(`count-${tipo}`);
+                listEl.innerHTML = '';
+
+                const lista = cadastros[tipo] || [];
+                countEl.textContent = `${lista.length} opção(ões)`;
+
+                lista.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = "flex justify-between items-center bg-white p-2 rounded border border-slate-200 text-xs shadow-sm";
+                    const suf = (tipo === 'percentual' || tipo === 'gris') ? '%' : 'R$';
+                    li.innerHTML = `
+                        <div>
+                            <span class="font-medium text-slate-800">${item.nome}</span>
+                            <span class="text-indigo-600 font-bold ml-1">(${item.valor} ${suf})</span>
+                        </div>
+                        <button onclick="removeOpcao('${tipo}', ${item.id})" class="text-red-500 hover:text-red-700">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    `;
+                    listEl.appendChild(li);
+                });
+            });
+
+            carregarRegrasClienteAuditoria();
+            lucide.createIcons();
+        }
+
+        async function carregarPlanilhaOnline() {
+            const url = document.getElementById('in-url-planilha-online').value.trim();
+            if (!url) return;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Erro ao acessar a URL.");
+                const text = await response.text();
+                const workbook = XLSX.read(text, { type: 'string' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const dadosTabela = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+                processarEArmazenarAbaTabela(dadosTabela);
+            } catch (err) {
+                alert("Falha ao carregar planilha online: " + err.message);
+            }
+        }
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (evt) {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+
+                const nomeAbaTabela = workbook.SheetNames.find(name => name.toLowerCase().includes('tabela'));
+                if (nomeAbaTabela) {
+                    const tabelaSheet = workbook.Sheets[nomeAbaTabela];
+                    const regrasImportadas = XLSX.utils.sheet_to_json(tabelaSheet, { defval: "" });
+                    processarEArmazenarAbaTabela(regrasImportadas);
+                }
+
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                const modoImportacao = document.getElementById('sel-modo-importacao').value;
+                if (modoImportacao === 'substituir') {
+                    rawExcelData = jsonData;
+                } else {
+                    rawExcelData = rawExcelData.concat(jsonData);
+                }
+
+                montarFiltrosDinâmicosParceiro();
+                recalcular();
+
+                document.getElementById('kpi-container').classList.remove('hidden');
+                document.getElementById('btn-export').classList.remove('hidden');
+                document.getElementById('btn-limpar-dados').classList.remove('hidden');
+                document.getElementById('btn-salvar-historico').classList.remove('hidden');
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processarEArmazenarAbaTabela(dadosAbaTabela) {
+            if (!dadosAbaTabela || dadosAbaTabela.length === 0) return;
+
+            let tabelasCarregadasCount = 0;
+            dadosAbaTabela.forEach(row => {
+                const cliente = row['CLIENTE'] || row['Cliente'] || 'Cliente Importado';
+                const tipo = (row['TIPO'] || row['Tipo'] || '').toString().toLowerCase();
+                const nomeRegra = row['NOME'] || row['Nome'] || 'Regra Importada';
+                const valor = parseFloat(row['VALOR'] || row['Valor'] || 0);
+
+                if (!tabelasClientes[cliente]) {
+                    tabelasClientes[cliente] = { peso: [], minimo: [], percentual: [], pedagio: [], gris: [], despacho: [] };
+                }
+
+                if (tipo && !isNaN(valor)) {
+                    let chaveTipo = '';
+                    if (tipo.includes('peso')) chaveTipo = 'peso';
+                    else if (tipo.includes('minimo') || tipo.includes('mínimo')) chaveTipo = 'minimo';
+                    else if (tipo.includes('percentual') || tipo.includes('%')) chaveTipo = 'percentual';
+                    else if (tipo.includes('pedagio') || tipo.includes('pedágio')) chaveTipo = 'pedagio';
+                    else if (tipo.includes('gris')) chaveTipo = 'gris';
+                    else if (tipo.includes('despacho')) chaveTipo = 'despacho';
+
+                    if (chaveTipo) {
+                        tabelasClientes[cliente][chaveTipo].push({
+                            id: Date.now() + Math.random(),
+                            nome: nomeRegra,
+                            valor: valor
+                        });
+                        tabelasCarregadasCount++;
+                    }
+                }
+            });
+
+            if (tabelasCarregadasCount > 0) {
+                salvarTabelasLocal();
+                atualizarDropdownsClientes();
+                renderCadastros();
+            }
+        }
+
+        function parseNum(val) {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            let str = String(val).replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.');
+            let n = parseFloat(str);
+            return isNaN(n) ? 0 : n;
+        }
+
+        function salvarAuditoriaNoHistorico() {
+            if (!auditResults || auditResults.length === 0) return;
+
+            const nomeLote = prompt("Digite um nome para a auditoria:", `Auditoria - ${new Date().toLocaleDateString('pt-BR')}`);
+            if (!nomeLote) return;
+
+            const clienteAuditoria = document.getElementById('sel-cliente-auditoria').value;
+
+            // Salva somente o recorte atualmente filtrado (todas as linhas quando não há filtro)
+            const listaSalvar = (resultadosFiltradosAtuais && resultadosFiltradosAtuais.length > 0)
+                ? resultadosFiltradosAtuais
+                : auditResults;
+            const filtrado = listaSalvar.length !== auditResults.length;
+
+            const totalValor = listaSalvar.reduce((acc, r) => acc + r.vlrFreteOrigem, 0);
+            const totalValReceber = listaSalvar.reduce((acc, r) => acc + (Number(r.freteValorPlanilha) || 0), 0);
+            const totalDivergencias = listaSalvar.filter(r => !r.isOK).length;
+            const ctrcsSalvos = listaSalvar.map(r => r.ctrc);
+
+            const novoRegistroHistorico = {
+                id: Date.now(),
+                dataHora: new Date().toLocaleString('pt-BR'),
+                nome: nomeLote,
+                cliente: clienteAuditoria,
+                totalCTRCs: listaSalvar.length,
+                totalDivergencias: totalDivergencias,
+                totalValor: totalValor,
+                totalValReceber: totalValReceber,
+                numerosFatura: Array.from(new Set(listaSalvar.map(r => String(r.numeroFatura ?? '').trim()).filter(f => f && f !== '-'))),
+                filtroAplicado: filtrado,
+                // todas as colunas das tabelas, linha a linha
+                colunas: montarLinhasCompletas(listaSalvar),
+                resultados: listaSalvar,
+                rawExcelData: filtrado
+                    ? rawExcelData.filter(row => ctrcsSalvos.includes(String(row['CTRC'] ?? row['Nº CTRC'] ?? row['NUMERO'] ?? '')))
+                    : rawExcelData
+            };
+
+            historicoAuditorias.unshift(novoRegistroHistorico);
+            salvarHistoricoLocal();
+            salvarAuditoriaNoGoogleSheets();
+            renderHistorico();
+            alert(`Auditoria salva com sucesso! ${novoRegistroHistorico.totalCTRCs} registro(s)${novoRegistroHistorico.filtroAplicado ? ' (somente os dados filtrados)' : ''} com todas as colunas.`);
+        }
+
+        // Nº FATURA distintos de um registro do histórico
+        function obterFaturasHistorico(item) {
+            const lista = (item && item.resultados) ? item.resultados : [];
+            const set = [];
+            lista.forEach(r => {
+                const f = String(r.numeroFatura ?? '').trim();
+                if (f && f !== '-' && !set.includes(f)) set.push(f);
+            });
+            return set;
+        }
+
+        // Total Frete Origem exibido com base na coluna VAL RECEBER
+        function obterTotalValReceberHistorico(item) {
+            if (typeof item.totalValReceber === 'number') return item.totalValReceber;
+            const lista = (item && item.resultados) ? item.resultados : [];
+            return lista.reduce((acc, r) => acc + (Number(r.freteValorPlanilha) || 0), 0);
+        }
+
+        function renderHistorico() {
+            const histTbody = document.getElementById('hist-tbody');
+            if (!histTbody) return;
+
+            const termoBusca = (document.getElementById('in-filtro-historico')?.value || '').toLowerCase().trim();
+            histTbody.innerHTML = '';
+
+            const filtrados = historicoAuditorias.filter(item => {
+                if (!termoBusca) return true;
+                const faturasItem = obterFaturasHistorico(item).join(' ').toLowerCase();
+                const ctrcsItem = (item.resultados || []).map(r => String(r.ctrc || '') + ' ' + String(r.ctrcOrigem || '')).join(' ').toLowerCase();
+                return item.nome.toLowerCase().includes(termoBusca) ||
+                       item.cliente.toLowerCase().includes(termoBusca) ||
+                       item.dataHora.toLowerCase().includes(termoBusca) ||
+                       faturasItem.includes(termoBusca) ||
+                       ctrcsItem.includes(termoBusca);
+            });
+
+            if (filtrados.length === 0) {
+                histTbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-400">Nenhum registro gravado no histórico.</td></tr>`;
+                return;
+            }
+
+            filtrados.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition border-b";
+                tr.innerHTML = `
+                    <td class="p-3 border-r font-medium text-slate-700">${item.dataHora}</td>
+                    <td class="p-3 border-r font-bold text-indigo-900">${item.nome}</td>
+                    <td class="p-3 border-r text-slate-600">${item.cliente}</td>
+                    <td class="p-3 border-r text-slate-700 font-semibold" title="${obterFaturasHistorico(item).join(', ')}">${obterFaturasHistorico(item).slice(0, 3).join(', ') || '-'}${obterFaturasHistorico(item).length > 3 ? ' (+' + (obterFaturasHistorico(item).length - 3) + ')' : ''}</td>
+                    <td class="p-3 border-r text-center font-bold">${item.totalCTRCs}</td>
+                    <td class="p-3 border-r text-center font-bold ${item.totalDivergencias > 0 ? 'text-red-600' : 'text-emerald-600'}">${item.totalDivergencias}</td>
+                    <td class="p-3 border-r font-bold text-slate-800">R$ ${obterTotalValReceberHistorico(item).toFixed(2)}</td>
+                    <td class="p-3 text-center space-x-2">
+                        <button onclick="carregarAuditoriaHistorico(${item.id})" title="Abrir" class="bg-indigo-100 text-indigo-700 p-1.5 rounded hover:bg-indigo-200 border border-indigo-300">
+                            <i data-lucide="folder-open" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="deletarHistorico(${item.id})" title="Excluir" class="bg-red-100 text-red-700 p-1.5 rounded hover:bg-red-200 border border-red-300">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                `;
+                histTbody.appendChild(tr);
+            });
+            lucide.createIcons();
+        }
+
+        function carregarAuditoriaHistorico(id) {
+            const item = historicoAuditorias.find(h => h.id === id);
+            if (!item) return;
+
+            rawExcelData = item.rawExcelData || [];
+            auditResults = item.resultados || [];
+
+            if (tabelasClientes[item.cliente]) {
+                selecionarClienteAuditoria(item.cliente);
+                carregarRegrasClienteAuditoria();
+            }
+
+            // Zera qualquer filtro ativo para trazer TODOS os dados salvos
+            const inputFiltroCtrcAud = document.getElementById('in-filtro-ctrc');
+            if (inputFiltroCtrcAud) inputFiltroCtrcAud.value = '';
+            const inputBuscaAud = document.getElementById('in-filtro-busca-texto');
+            if (inputBuscaAud) inputBuscaAud.value = '';
+            document.querySelectorAll('.chk-filtro-status, .chk-filtro-minimo, .chk-filtro-conf').forEach(c => c.checked = true);
+
+            if (rawExcelData.length > 0) {
+                montarFiltrosDinâmicosParceiro();
+                recalcular();
+            } else {
+                // Registro salvo sem a planilha original: renderiza direto os resultados gravados
+                resultadosFiltradosAtuais = auditResults;
+                renderizarTabelasComFiltro();
+            }
+            switchTab('auditoria');
+
+            document.getElementById('kpi-container').classList.remove('hidden');
+            document.getElementById('btn-export').classList.remove('hidden');
+            document.getElementById('btn-limpar-dados').classList.remove('hidden');
+            document.getElementById('btn-salvar-historico').classList.remove('hidden');
+        }
+
+        function deletarHistorico(id) {
+            if (confirm("Tem certeza que deseja apagar?")) {
+                historicoAuditorias = historicoAuditorias.filter(h => h.id !== id);
+                salvarHistoricoLocal();
+                salvarAuditoriaNoGoogleSheets();
+                renderHistorico();
+            }
+        }
+
+        function autoVerificarEAplicarRegras() {
+            if (!rawExcelData || rawExcelData.length === 0) return;
+            recalcular();
+            alert("Auto-verificação finalizada! Regras testadas linha a linha.");
+        }
+
+        // --- RECALCULAR COM ITERAÇÃO COMPLETA LINHA A LINHA ---
+        function recalcular() {
+            if (!rawExcelData || rawExcelData.length === 0) return;
+
+            const clienteAuditoria = document.getElementById('sel-cliente-auditoria').value;
+            const cadastros = tabelasClientes[clienteAuditoria] || { peso: [], minimo: [], percentual: [], pedagio: [], gris: [], despacho: [] };
+
+            const deduzirImposto = document.getElementById('chk-deduzir-imposto').checked;
+            const fonteAliquota = document.getElementById('sel-fonte-aliquota').value;
+            const aliq1 = parseNum(document.getElementById('in-aliquota-fixa-1').value);
+            const aliq2 = parseNum(document.getElementById('in-aliquota-fixa-2').value);
+
+            // VALOR LIDO DO CAMPO DIGITADO NO TOPO
+            const retirarPeso = parseNum(document.getElementById('in-retirar-peso').value);
+
+            const arrPercentual = cadastros.percentual.map(i => i.valor);
+            const taxasPesoParaTestar = cadastros.peso.map(i => i.valor);
+            const listaMinimosCliente = cadastros.minimo.map(i => i.valor);
+
+            // Valores cadastrados para a conferência de Pedágio / GRIS / Despacho (testa TODAS as opções cadastradas, uma a uma)
+            const listaPedagio = (cadastros.pedagio || []).map(i => parseNum(i.valor)).filter(v => !isNaN(v));
+            const listaGris = (cadastros.gris || []).map(i => parseNum(i.valor)).filter(v => !isNaN(v));
+            const listaDespacho = (cadastros.despacho || []).map(i => parseNum(i.valor)).filter(v => !isNaN(v));
+            const pedagioValor = listaPedagio.length ? listaPedagio[0] : 0;
+            const grisValor = listaGris.length ? listaGris[0] : 0;
+            const despachoValor = listaDespacho.length ? listaDespacho[0] : 0;
+            // Escolhe, entre as opções cadastradas, a que bate com o valor da planilha (senão, a mais próxima)
+            const melhorOpcao = (lista, fallback, calcFn, alvo, tol) => {
+                if (!lista.length) return { calc: calcFn(fallback), ok: Math.abs(calcFn(fallback) - alvo) <= tol };
+                let melhor = null;
+                for (const v of lista) {
+                    const calc = calcFn(v);
+                    const diff = Math.abs(calc - alvo);
+                    if (melhor === null || diff < melhor.diff) melhor = { calc: calc, diff: diff };
+                    if (diff <= tol) return { calc: calc, ok: true };
+                }
+                return { calc: melhor.calc, ok: melhor.diff <= tol };
+            };
+
+
+            const TOLERANCIA = 0.05;
+
+            let totalValReceberImp = 0;
+            let totalVlrFreteOrigemImp = 0;
+            let divergenciasCount = 0;
+            const agrupamentoMensal = {};
+
+            auditResults = rawExcelData.map((row, idx) => {
+                const ctrc = row['CTRC ORIGEM'] || row['NUMERO CTRC'] || `Linha ${idx + 1}`;
+                const numeroFatura = row['NUMERO DA FATURA'] || row['NUMERO FATURA'] || row['FATURA'] || row['Nº FATURA'] || '-';
+                // Exibe exclusivamente o valor gravado na linha da planilha.
+                // O campo "Incluir Parceiro" não pode preencher visualmente linhas fora do filtro.
+                const parceiro = (row['PARCEIRO'] && String(row['PARCEIRO']).trim()) || '-';
+                const ctrcOrigem = row['CTRC ORIGEM'] || row['NUMERO CTRC'] || `Linha ${idx + 1}`;
+                const vlrFreteOrigem = parseNum(row['VLR FRETE ORIGEM']);
+                const valReceberPlanilha = parseNum(row['VAL RECEBER']);
+                const freteValorPuroPlanilha = parseNum(row['FRETE VALOR']);
+
+                // LEITURA DO PESO DA PLANILHA (SE FOR INFORMADO)
+                let pesoCalc = parseNum(row['PESO CALC'] || row['peso calc']);
+
+                const fretePesoPlanilha = parseNum(row['FRETE PESO']);
+                const dataEmissao = row['DATA EMISSAO'] || row['Data Emissão'] || '';
+
+                let chaveMesAno = 'Outros/Indefinido';
+                if (dataEmissao) {
+                    const dt = new Date(dataEmissao);
+                    if (!isNaN(dt.getTime())) {
+                        chaveMesAno = `${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+                    } else if (typeof dataEmissao === 'string' && dataEmissao.length >= 7) {
+                        chaveMesAno = dataEmissao.substring(0, 7);
+                    }
+                }
+
+                if (!agrupamentoMensal[chaveMesAno]) {
+                    agrupamentoMensal[chaveMesAno] = 0;
+                }
+                agrupamentoMensal[chaveMesAno] += valReceberPlanilha;
+
+                let pctDeducao1 = fonteAliquota === 'coluna' ? parseNum(row['ALIQUOTA']) : aliq1;
+                let pctDeducao2 = aliq2;
+
+                let baseLiquida1 = deduzirImposto && pctDeducao1 > 0 ? vlrFreteOrigem * (1 - (pctDeducao1 / 100)) : vlrFreteOrigem;
+                let baseLiquida2 = deduzirImposto && pctDeducao2 > 0 ? vlrFreteOrigem * (1 - (pctDeducao2 / 100)) : vlrFreteOrigem;
+
+                let melhorIsOK = false;
+                let finalFValCIcms = 0, finalFVal1 = 0, finalFVal2 = 0, finalFPeso = 0;
+                let pctAplicado = 0, pesoAplicado = 0;
+                let melhorFreteCalcComRetirarPeso = 0;
+                let eMinimoCadastrado = false;
+                let rateMinimo = 0;
+                let matchPctCIcms = false, matchPct1 = false, matchPct2 = false;
+
+                const pesoAbatido = Math.max(0, pesoCalc - retirarPeso);
+
+                // 1. Obtém os valores diretos da planilha para Frete Valor e Frete Peso - inserido por Alcides
+                let fValPlanilha = Math.max(0, parseFloat(row['FRETE VALOR']) || 0);
+                let fPesoPlanilha = Math.max(0, parseFloat(row['FRETE PESO']) || 0);
+
+                // VERIFICAÇÃO ÚNICA E CORRETA DE "É MÍNIMO CADASTRADO?":
+                // Só é "Sim" se o Frete Valor (Planilha) OU o Frete Peso (Planilha) for igual
+                // a um dos valores de Frete Mínimo cadastrados na tabela do cliente.
+                if (listaMinimosCliente.length > 0) {
+                    for (let tMin of listaMinimosCliente) {
+                        if (tMin > 0) {
+                            let bateuFVal = fValPlanilha > 0 && Math.abs(fValPlanilha - tMin) <= TOLERANCIA;
+                            let bateuFPeso = fPesoPlanilha > 0 && Math.abs(fPesoPlanilha - tMin) <= TOLERANCIA;
+
+                            if (bateuFVal || bateuFPeso) {
+                                rateMinimo = tMin;
+                                eMinimoCadastrado = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // ITERAÇÃO COMBINATÓRIA UMA A UMA DAS REGRAS
+                const listaTaxasPeso = taxasPesoParaTestar.length > 0 ? taxasPesoParaTestar : [0];
+                const listaMinimos = listaMinimosCliente.length > 0 ? listaMinimosCliente : [0];
+
+                // ===== BUSCA LINHA A LINHA NA TABELA DE PESO (Frete Peso Calc) =====
+                // Testa TODAS as taxas de peso cadastradas x TODOS os mínimos cadastrados,
+                // comparando com Frete Peso (Planilha), Frete Valor (Planilha) e Val Receber.
+                const alvosPeso = [fretePesoPlanilha, freteValorPuroPlanilha, valReceberPlanilha].filter(v => v > 0);
+                let pesoMatchOK = false;
+                let pesoTaxaEncontrada = 0, pesoMinEncontrado = 0;
+                let pesoCalcEncontrado = 0, pesoCalcRetirarEncontrado = 0;
+                let melhorDiffPeso = Infinity;
+                let pesoTaxaProxima = 0, pesoMinProximo = 0, pesoCalcProximo = 0, pesoCalcRetirarProximo = 0;
+                for (let tPeso of listaTaxasPeso) {
+                    for (let tMin of listaMinimos) {
+                        const cSemAbat = pesoCalc * tPeso;
+                        const cComMin = (pesoCalc * tPeso) + tMin;
+                        const cComRetirar = (pesoAbatido * tPeso) + tMin;
+                        const candidatos = [cSemAbat, cComMin, cComRetirar];
+                        for (const cand of candidatos) {
+                            for (const alvo of alvosPeso) {
+                                const diff = Math.abs(alvo - cand);
+                                if (diff < melhorDiffPeso) {
+                                    melhorDiffPeso = diff;
+                                    pesoTaxaProxima = tPeso;
+                                    pesoMinProximo = tMin;
+                                    pesoCalcProximo = cSemAbat;
+                                    pesoCalcRetirarProximo = cComRetirar;
+                                }
+                                if (diff <= TOLERANCIA) {
+                                    pesoMatchOK = true;
+                                    pesoTaxaEncontrada = tPeso;
+                                    pesoMinEncontrado = tMin;
+                                    pesoCalcEncontrado = cSemAbat;
+                                    pesoCalcRetirarEncontrado = cComRetirar;
+                                    break;
+                                }
+                            }
+                            if (pesoMatchOK) break;
+                        }
+                        if (pesoMatchOK) break;
+                    }
+                    if (pesoMatchOK) break;
+                }
+                if (!pesoMatchOK && melhorDiffPeso < Infinity) {
+                    pesoTaxaEncontrada = pesoTaxaProxima;
+                    pesoMinEncontrado = pesoMinProximo;
+                    pesoCalcEncontrado = pesoCalcProximo;
+                    pesoCalcRetirarEncontrado = pesoCalcRetirarProximo;
+                }
+
+                for (let rPct of (arrPercentual.length > 0 ? arrPercentual : [0])) {
+                    let tempFValCIcms = vlrFreteOrigem * (rPct / 100);
+                    let tempFVal1 = baseLiquida1 * (rPct / 100);
+                    let tempFVal2 = baseLiquida2 * (rPct / 100);
+                    // com Frete Valor (Planilha) e, na ausência dele, com Frete Peso (Planilha).
+                    const alvosPercentual = [freteValorPuroPlanilha, fretePesoPlanilha, valReceberPlanilha].filter(v => v > 0);
+                    let bateuPctCIcms = alvosPercentual.some(a => Math.abs(a - tempFValCIcms) <= TOLERANCIA);
+                    let bateuPct1 = alvosPercentual.some(a => Math.abs(a - tempFVal1) <= TOLERANCIA);
+                    let bateuPct2 = alvosPercentual.some(a => Math.abs(a - tempFVal2) <= TOLERANCIA);
+
+                    // Se o Frete Mínimo bateu no Frete Valor (Planilha) ou Frete Peso (Planilha), ou se bateu os percentuais - Inserido por Alcides
+                    if (bateuPctCIcms || bateuPct1 || bateuPct2 || eMinimoCadastrado) {
+                        melhorIsOK = true;
+                        finalFValCIcms = tempFValCIcms;
+                        finalFVal1 = tempFVal1;
+                        finalFVal2 = tempFVal2;
+                        pctAplicado = rPct;
+                        matchPctCIcms = bateuPctCIcms;
+                        matchPct1 = bateuPct1;
+                        matchPct2 = bateuPct2;
+
+                        pesoAplicado = pesoTaxaEncontrada || taxasPesoParaTestar[0] || 0;
+                        finalFPeso = pesoMatchOK ? pesoCalcEncontrado : (pesoCalc * pesoAplicado);
+                        melhorFreteCalcComRetirarPeso = pesoMatchOK ? pesoCalcRetirarEncontrado : ((pesoAbatido * pesoAplicado) + rateMinimo);
+                        break;
+                    }
+
+                    for (let tPeso of listaTaxasPeso) {
+                        for (let tMin of listaMinimos) {
+                            let tempFPesoSemAbatimento = pesoCalc * tPeso;
+                            let tempFreteCalcComRetirarPeso = (pesoAbatido * tPeso) + tMin;
+
+                            // Alvo a comparar na planilha: Frete Peso Planilha ou Val Receber
+                            let alvoPlanilha = fretePesoPlanilha > 0 ? fretePesoPlanilha : valReceberPlanilha;
+
+                            let bateuPesoPuro = fretePesoPlanilha > 0 && Math.abs(fretePesoPlanilha - tempFPesoSemAbatimento) <= TOLERANCIA;
+                            let bateuCalculoComRetirar = alvoPlanilha > 0 && Math.abs(alvoPlanilha - tempFreteCalcComRetirarPeso) <= TOLERANCIA;
+                            let bateuValReceber = valReceberPlanilha > 0 && Math.abs(valReceberPlanilha - tempFreteCalcComRetirarPeso) <= TOLERANCIA;
+
+                            if (bateuPesoPuro || bateuCalculoComRetirar || bateuValReceber) {
+                                melhorIsOK = true;
+                                finalFValCIcms = tempFValCIcms;
+                                finalFVal1 = tempFVal1;
+                                finalFVal2 = tempFVal2;
+                                finalFPeso = tempFPesoSemAbatimento;
+                                melhorFreteCalcComRetirarPeso = tempFreteCalcComRetirarPeso;
+                                pctAplicado = rPct;
+                                pesoAplicado = tPeso;
+                                rateMinimo = tMin;
+                                // NOTA: o flag eMinimoCadastrado NÃO é alterado aqui.
+                                // Ele só fica "Sim" quando Frete Valor ou Frete Peso da planilha
+                                // bate com um mínimo cadastrado (verificado acima).
+                                break;
+                            }
+                        }
+                        if (melhorIsOK) break;
+                    }
+                    if (melhorIsOK) break;
+                }
+
+                // CASO NÃO ENCONTRE NENHUM MATCH EXATO, APLICA AS PRIMEIRAS TAXAS OU VALORES PADRÕES
+                if (!melhorIsOK) {
+                    pctAplicado = arrPercentual[0] || 0;
+                    pesoAplicado = pesoTaxaEncontrada || taxasPesoParaTestar[0] || 0;
+                    rateMinimo = pesoMinEncontrado || listaMinimosCliente[0] || 0;
+
+                    finalFValCIcms = vlrFreteOrigem * (pctAplicado / 100);
+                    finalFVal1 = baseLiquida1 * (pctAplicado / 100);
+                    finalFVal2 = baseLiquida2 * (pctAplicado / 100);
+                    finalFPeso = pesoCalcEncontrado || (pesoCalc * pesoAplicado);
+                    melhorFreteCalcComRetirarPeso = pesoCalcRetirarEncontrado || ((pesoAbatido * pesoAplicado) + rateMinimo);
+                    if (pesoMatchOK) melhorIsOK = true;
+
+                    // Confirma "É Mínimo Cadastrado?" comparando o rateMinimo padrão contra
+                    // Frete Valor (Planilha) ou Frete Peso (Planilha) — nunca contra Val Receber.
+                    if (rateMinimo > 0 && ((fValPlanilha > 0 && Math.abs(fValPlanilha - rateMinimo) <= TOLERANCIA) || (fPesoPlanilha > 0 && Math.abs(fPesoPlanilha - rateMinimo) <= TOLERANCIA))) {
+                        eMinimoCadastrado = true;
+                        melhorIsOK = true;
+                    }
+                }
+
+                // Regra: TIPO DE CALCULO = "COMIS IMPORTADA" => STATUS sempre FAT OK
+                const tipoCalculoLinha = String(row['TIPO DE CALCULO'] || '').trim().toUpperCase();
+                if (tipoCalculoLinha === 'COMIS IMPORTADA') {
+                    melhorIsOK = true;
+                }
+
+                if (!melhorIsOK) {
+                    divergenciasCount++;
+                }
+
+                totalValReceberImp += valReceberPlanilha;
+                totalVlrFreteOrigemImp += vlrFreteOrigem;
+
+                // ===== CONFERÊNCIA DE PEDÁGIO, GRIS E DESPACHO (Calculado vs Planilha) =====
+                const pedagioSheet = parseNum(row['PEDAGIO']);
+                const valMercadoriaSheet = parseNum(row['VAL MERCADORIA']);
+                const grisSheet = parseNum(row['GRIS']);
+                const despachoSheet = parseNum(row['DESPACHO']);
+
+                // PED CALC = frações de 100Kg (arredondado p/ cima) × valor cadastrado de Pedágio (testa cada opção cadastrada)
+                const fracoes100 = pesoCalc > 0 ? Math.ceil(pesoCalc / 100) : 0;
+                const resPed = melhorOpcao(listaPedagio, pedagioValor, v => fracoes100 * v, pedagioSheet, TOLERANCIA);
+                const pedCalc = resPed.calc;
+                // GRIS CALC = Val Mercadoria × (% GRIS cadastrado / 100) (testa cada opção cadastrada)
+                const resGris = melhorOpcao(listaGris, grisValor, v => valMercadoriaSheet * (v / 100), grisSheet, TOLERANCIA);
+                const grisCalc = resGris.calc;
+                // DESP CALC = valor cadastrado de Despacho (testa cada opção cadastrada)
+                const resDesp = melhorOpcao(listaDespacho, despachoValor, v => v, despachoSheet, TOLERANCIA);
+                const despCalc = resDesp.calc;
+
+                const pedOK = resPed.ok;
+                const grisOK = resGris.ok;
+                const despOK = resDesp.ok;
+
+                const resultadoConf = (pedOK && grisOK && despOK) ? 'OK' : 'INCORRETO';
+
+                // ===== FRETES VS RECEITAS (Claro x Parceiro) =====
+                const tdeClaro = parseNum(row['TDE CTRC ORIGEM']);
+                const tdaClaro = parseNum(row['TDA CTRC ORIGEM']);
+                const tdeParceiro = parseNum(row['TDE']);
+                const tdaParceiro = parseNum(row['TDA']);
+                const saldo = vlrFreteOrigem - valReceberPlanilha;
+
+                let alertasFretes = [];
+                if (tdeClaro < tdeParceiro) alertasFretes.push('TDE Claro < TDE Parceiro');
+                if (tdaClaro < tdaParceiro) alertasFretes.push('TDA Claro < TDA Parceiro');
+                let resultadoFretes;
+                if (alertasFretes.length > 0) {
+                    resultadoFretes = alertasFretes.join(' / ');
+                } else if (saldo < 0) {
+                    resultadoFretes = 'SALDO NEGATIVO';
+                } else {
+                    resultadoFretes = 'OK';
+                }
+
+                return {
+                    idxLinha: idx,
+                    ctrc: ctrc,
+                    ctrcOrigem: ctrcOrigem,
+                    numeroFatura: numeroFatura,
+                    parceiro: parceiro,
+                    vlrFreteOrigem: vlrFreteOrigem,
+                    deducao1: pctDeducao1,
+                    deducao2: pctDeducao2,
+                    baseLiquida: baseLiquida1,
+                    baseLiquida2: baseLiquida2,
+                    pesoAbatido: pesoAbatido,
+                    freteValorPlanilha: valReceberPlanilha,
+                    freteValorPuroPlanilha: freteValorPuroPlanilha,
+                    fretePercentualCalcCIcms: finalFValCIcms,
+                    fretePercentualCalc1: finalFVal1,
+                    fretePercentualCalc2: finalFVal2,
+                    matchPctCIcms: matchPctCIcms,
+                    matchPct1: matchPct1,
+                    matchPct2: matchPct2,
+                    fretePesoPlanilha: fretePesoPlanilha,
+                    fretePesoCalc: finalFPeso,
+                    pesoCalc: pesoCalc,
+                    retirarPeso: retirarPeso,
+                    novoParametroCalc: melhorFreteCalcComRetirarPeso,
+                    eMinimoCadastrado: eMinimoCadastrado,
+                    rateMinimo: rateMinimo,
+                    isOK: melhorIsOK,
+                    statusText: melhorIsOK ? 'FAT OK' : 'DIVERGENTE',
+                    pctAplicado: pctAplicado,
+                    pesoAplicado: pesoAplicado,
+                    mesAno: chaveMesAno,
+                    // Conferência Pedágio/GRIS/Despacho
+                    pedagioSheet: pedagioSheet,
+                    valMercadoriaSheet: valMercadoriaSheet,
+                    grisSheet: grisSheet,
+                    despachoSheet: despachoSheet,
+                    pedCalc: pedCalc,
+                    grisCalc: grisCalc,
+                    despCalc: despCalc,
+                    pedOK: pedOK,
+                    grisOK: grisOK,
+                    despOK: despOK,
+                    resultadoConf: resultadoConf,
+                    // Fretes vs Receitas
+                    tdeClaro: tdeClaro,
+                    tdaClaro: tdaClaro,
+                    tdeParceiro: tdeParceiro,
+                    tdaParceiro: tdaParceiro,
+                    saldo: saldo,
+                    resultadoFretes: resultadoFretes
+                };
+            });
+
+            const mesesQtd = Object.keys(agrupamentoMensal).length || 1;
+            const mediaMensalValReceber = totalValReceberImp / mesesQtd;
+            const pctValReceberVsFreteOrigem = totalVlrFreteOrigemImp > 0 ? (totalValReceberImp / totalVlrFreteOrigemImp) * 100 : 0;
+
+            document.getElementById('kpi-total-ctrc').textContent = rawExcelData.length;
+            document.getElementById('kpi-frete-valor').textContent = `R$ ${totalValReceberImp.toFixed(2)}`;
+            document.getElementById('kpi-frete-peso').textContent = `R$ ${totalVlrFreteOrigemImp.toFixed(2)}`;
+            document.getElementById('kpi-media-mensal').textContent = `R$ ${mediaMensalValReceber.toFixed(2)}`;
+            document.getElementById('kpi-media-mensal-sub').textContent = `em ${mesesQtd} mês(es) identificado(s)`;
+            document.getElementById('kpi-percentual-proporcao').textContent = `${pctValReceberVsFreteOrigem.toFixed(2)} %`;
+            document.getElementById('kpi-divergencias').textContent = divergenciasCount;
+
+            renderizarTabelasComFiltro();
+        }
+
+        function montarFiltrosDinâmicosParceiro() {
+            const container = document.getElementById('container-filtro-parceiros');
+            container.innerHTML = '';
+
+            const parceirosUnicos = Array.from(new Set(rawExcelData.map(r => r['PARCEIRO'] || '-'))).sort();
+            if (parceirosUnicos.length === 0) {
+                container.innerHTML = '<span class="text-slate-400 text-[11px]">Nenhum parceiro disponível</span>';
+                return;
+            }
+
+            parceirosUnicos.forEach(parc => {
+                const label = document.createElement('label');
+                label.className = "flex items-center space-x-1.5 cursor-pointer";
+                label.innerHTML = `
+                    <input type="checkbox" value="${parc}" checked onchange="filtrarTabela()" class="chk-filtro-parceiro rounded text-indigo-600">
+                    <span class="truncate">${parc}</span>
+                `;
+                container.appendChild(label);
+            });
+        }
+
+        function limparFiltrosMultiplos() {
+            document.getElementById('in-filtro-busca-texto').value = '';
+            const elFiltroCtrc = document.getElementById('in-filtro-ctrc');
+            if (elFiltroCtrc) elFiltroCtrc.value = '';
+            document.querySelectorAll('.chk-filtro-parceiro').forEach(cb => cb.checked = true);
+            document.querySelectorAll('.chk-filtro-status').forEach(cb => cb.checked = true);
+            document.querySelectorAll('.chk-filtro-minimo').forEach(cb => cb.checked = true);
+            document.querySelectorAll('.chk-filtro-conf').forEach(cb => cb.checked = true);
+            filtrarTabela();
+        }
+
+        function atualizarKpisComFiltro(lista) {
+            const linhas = lista || [];
+            let somaValReceber = 0;
+            let somaFreteOrigem = 0;
+            let somaCalculado = 0;
+            let divergentes = 0;
+            const meses = {};
+
+            linhas.forEach(r => {
+                somaValReceber += (r.freteValorPlanilha || 0);
+                somaFreteOrigem += (r.vlrFreteOrigem || 0);
+                somaCalculado += (r.novoParametroCalc || 0);
+                if (!r.isOK) divergentes++;
+                if (r.mesAno) meses[r.mesAno] = true;
+            });
+
+            const mesesQtd = Object.keys(meses).length || 1;
+            const mediaMensal = somaValReceber / mesesQtd;
+            const pctProporcao = somaFreteOrigem > 0 ? (somaValReceber / somaFreteOrigem) * 100 : 0;
+            const diff = somaValReceber - somaCalculado;
+
+            document.getElementById('kpi-total-ctrc').textContent = linhas.length;
+            document.getElementById('kpi-frete-valor').textContent = `R$ ${somaValReceber.toFixed(2)}`;
+            document.getElementById('kpi-frete-peso').textContent = `R$ ${somaFreteOrigem.toFixed(2)}`;
+            document.getElementById('kpi-media-mensal').textContent = `R$ ${mediaMensal.toFixed(2)}`;
+            document.getElementById('kpi-media-mensal-sub').textContent = `em ${mesesQtd} mês(es) identificado(s)`;
+            document.getElementById('kpi-percentual-proporcao').textContent = `${pctProporcao.toFixed(2)} %`;
+            document.getElementById('kpi-divergencias').textContent = divergentes;
+
+            const elDiffValor = document.getElementById('kpi-frete-valor-diff');
+            if (elDiffValor) elDiffValor.textContent = `Diff: R$ ${diff.toFixed(2)}`;
+            const elDiffPeso = document.getElementById('kpi-frete-peso-diff');
+            if (elDiffPeso) elDiffPeso.textContent = `Diff: R$ ${(somaFreteOrigem - somaValReceber).toFixed(2)}`;
+        }
+
+        function renderizarTabelasComFiltro() {
+
+            const auditTbody = document.getElementById('audit-tbody');
+            if (!auditTbody || !auditResults || auditResults.length === 0) return;
+
+            const inputBusca = document.getElementById('in-filtro-busca-texto');
+            const termoBusca = inputBusca ? inputBusca.value.toLowerCase().trim() : '';
+
+            // Filtro dedicado por Nº CTRC (coluna da planilha "CTRC ORIGEM")
+            const inputCtrc = document.getElementById('in-filtro-ctrc');
+            const termosCtrc = inputCtrc
+                ? inputCtrc.value.split(/[\s,;]+/).map(t => t.toLowerCase().trim()).filter(Boolean)
+                : [];
+
+            const chksParceiros = Array.from(document.querySelectorAll('.chk-filtro-parceiro'));
+            const parceirosAtivos = chksParceiros.length > 0 ? chksParceiros.filter(c => c.checked).map(c => c.value) : null;
+
+            const chksStatus = Array.from(document.querySelectorAll('.chk-filtro-status'));
+            const statusAtivos = chksStatus.length > 0 ? chksStatus.filter(c => c.checked).map(c => c.value) : null;
+
+            const chksMinimo = Array.from(document.querySelectorAll('.chk-filtro-minimo'));
+            const minimosAtivos = chksMinimo.length > 0 ? chksMinimo.filter(c => c.checked).map(c => c.value) : null;
+
+            const chksConf = Array.from(document.querySelectorAll('.chk-filtro-conf'));
+            const confAtivos = chksConf.length > 0 ? chksConf.filter(c => c.checked).map(c => c.value) : null;
+
+            const resultadosBase = auditResults.filter(r => {
+                let passaBusca = true;
+                if (termoBusca) {
+                    // Busca também nos dados da tabela "Conferência de Pedágio, GRIS e Despacho"
+                    const textoLinha = [
+                        r.ctrc, r.numeroFatura, r.parceiro, r.ctrcOrigem,
+                        (r.pedagioSheet || 0).toFixed(2), (r.grisSheet || 0).toFixed(2), (r.despachoSheet || 0).toFixed(2),
+                        (r.valMercadoriaSheet || 0).toFixed(2), (r.pesoCalc || 0).toFixed(2),
+                        (r.pedCalc || 0).toFixed(2), (r.grisCalc || 0).toFixed(2), (r.despCalc || 0).toFixed(2),
+                        r.resultadoConf
+                    ].join(' ').toLowerCase();
+                    passaBusca = textoLinha.includes(termoBusca);
+                }
+
+                let passaParceiro = true;
+                if (parceirosAtivos !== null) {
+                    passaParceiro = parceirosAtivos.includes(r.parceiro);
+                }
+
+                let passaMinimo = true;
+                if (minimosAtivos !== null) {
+                    const stringMinimo = r.eMinimoCadastrado ? 'Sim' : 'Não';
+                    passaMinimo = minimosAtivos.includes(stringMinimo);
+                }
+
+                let passaCtrc = true;
+                if (termosCtrc.length > 0) {
+                    const ctrcLinha = String(r.ctrcOrigem ?? r.ctrc ?? '').toLowerCase();
+                    const ctrcLinhaAlt = String(r.ctrc ?? '').toLowerCase();
+                    passaCtrc = termosCtrc.some(t => ctrcLinha.includes(t) || ctrcLinhaAlt.includes(t));
+                }
+
+                return passaBusca && passaParceiro && passaMinimo && passaCtrc;
+            });
+
+            // "Status da Auditoria" filtra apenas a tabela "Resultado da Conferência e Auditoria"
+            const resultadosFiltrados = resultadosBase.filter(r =>
+                statusAtivos === null ? true : statusAtivos.includes(r.statusText)
+            );
+
+            // "Pedágio / GRIS / Despacho" filtra apenas a tabela de Conferência de Pedágio, GRIS e Despacho
+            const resultadosConf = resultadosBase.filter(r =>
+                confAtivos === null ? true : confAtivos.includes(r.resultadoConf === 'OK' ? 'OK' : 'DIVERGENTE')
+            );
+
+            // guarda o recorte atual (usado por "Salvar no Histórico" e pelos gráficos)
+            resultadosFiltradosAtuais = resultadosFiltrados;
+
+            // ATUALIZA OS CARDS (KPIs) DE ACORDO COM OS FILTROS APLICADOS
+            atualizarKpisComFiltro(resultadosFiltrados);
+
+
+
+            // Renderiza Tabela de Auditoria
+            auditTbody.innerHTML = '';
+            if (resultadosFiltrados.length === 0) {
+                auditTbody.innerHTML = `<tr><td colspan="17" class="text-center py-8 text-slate-400">Nenhum registro encontrado.</td></tr>`;
+            } else {
+                resultadosFiltrados.forEach(r => {
+                    const tr = document.createElement('tr');
+                    tr.className = r.isOK ? "hover:bg-slate-50 transition" : "bg-red-50/50 hover:bg-red-100/50 transition";
+
+                    tr.innerHTML = `
+                        <td class="p-3 border-r font-medium text-slate-700">${r.ctrc}</td>
+                        <td class="p-3 border-r bg-slate-100/50 text-slate-900 font-bold">${r.numeroFatura}</td>
+                        <td class="p-3 border-r font-semibold text-indigo-900 bg-indigo-50/30">${r.parceiro}</td>
+                        <td class="p-3 border-r font-semibold">R$ ${r.vlrFreteOrigem.toFixed(2)}</td>
+                        <td class="p-3 border-r bg-amber-50/50 font-bold text-amber-900">${r.deducao1.toFixed(1)}%</td>
+                        <td class="p-3 border-r bg-amber-50/50 font-bold text-amber-900">${r.deducao2.toFixed(1)}%</td>
+                        <td class="p-3 border-r bg-amber-100/60 font-black text-amber-950">R$ ${r.baseLiquida.toFixed(2)}</td>
+                        <td class="p-3 border-r font-extrabold text-indigo-950 bg-indigo-50/50">R$ ${r.freteValorPlanilha.toFixed(2)}</td>
+                        <td class="p-3 border-r font-bold text-sky-900 bg-sky-50/50">R$ ${r.freteValorPuroPlanilha.toFixed(2)}</td>
+                        <td class="p-3 border-r font-bold ${r.matchPctCIcms ? 'text-emerald-900 bg-emerald-200/70 ring-1 ring-emerald-500' : 'text-teal-800 bg-teal-50/50'}">R$ ${r.fretePercentualCalcCIcms.toFixed(2)}${r.matchPctCIcms ? ' ✓' : ''}</td>
+                        <td class="p-3 border-r font-bold ${r.matchPct1 ? 'text-emerald-900 bg-emerald-200/70 ring-1 ring-emerald-500' : 'text-blue-800 bg-blue-50/50'}">R$ ${r.fretePercentualCalc1.toFixed(2)}${r.matchPct1 ? ' ✓' : ''}</td>
+                        <td class="p-3 border-r font-bold ${r.matchPct2 ? 'text-emerald-900 bg-emerald-200/70 ring-1 ring-emerald-500' : 'text-purple-800 bg-purple-50/50'}">R$ ${r.fretePercentualCalc2.toFixed(2)}${r.matchPct2 ? ' ✓' : ''}</td>
+                        <td class="p-3 border-r font-semibold">R$ ${r.fretePesoPlanilha.toFixed(2)}</td>
+                        <td class="p-3 border-r font-black text-emerald-900 bg-emerald-100/60">R$ ${r.fretePesoCalc.toFixed(2)}</td>
+                        <td class="p-3 border-r font-black text-indigo-950 bg-indigo-100/70">R$ ${r.novoParametroCalc.toFixed(2)}</td>
+                        <td class="p-3 border-r bg-indigo-50/50 text-center font-bold text-xs ${r.eMinimoCadastrado ? 'text-indigo-800' : 'text-slate-400'}">
+                            ${r.eMinimoCadastrado ? `Sim (R$ ${r.rateMinimo.toFixed(2)})` : 'Não'}
+                        </td>
+                        <td class="p-3 text-center whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-[11px] font-black tracking-wide ${r.isOK ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300'}">
+                                ${r.statusText}
+                            </span>
+                        </td>
+                    `;
+                    auditTbody.appendChild(tr);
+                });
+            }
+
+            // Renderiza Guia de Impostos (memória de cálculo completa)
+            const taxTbody = document.getElementById('tax-tbody');
+            if (taxTbody) {
+                taxTbody.innerHTML = '';
+                const listaTax = resultadosFiltrados.length > 0 ? resultadosFiltrados : auditResults;
+                if (!listaTax || listaTax.length === 0) {
+                    taxTbody.innerHTML = `<tr><td colspan="23" class="text-center py-8 text-slate-400">Nenhum registro encontrado.</td></tr>`;
+                } else {
+                    listaTax.forEach(r => {
+                        const abatido1 = r.vlrFreteOrigem - r.baseLiquida;
+                        const abatido2 = r.vlrFreteOrigem - (r.baseLiquida2 !== undefined ? r.baseLiquida2 : r.vlrFreteOrigem);
+                        const base2 = r.baseLiquida2 !== undefined ? r.baseLiquida2 : r.vlrFreteOrigem;
+                        const pesoAbat = r.pesoAbatido !== undefined ? r.pesoAbatido : Math.max(0, (r.pesoCalc || 0) - (r.retirarPeso || 0));
+                        const diferenca = (r.novoParametroCalc || 0) - (r.freteValorPlanilha || 0);
+                        const tr = document.createElement('tr');
+                        tr.className = r.isOK ? "hover:bg-slate-50 transition border-b" : "bg-red-50/50 hover:bg-red-100/50 transition border-b";
+                        tr.innerHTML = `
+                            <td class="p-3 border-r font-bold text-slate-800">${r.ctrc}</td>
+                            <td class="p-3 border-r font-semibold text-indigo-900 bg-indigo-50/30">${r.parceiro}</td>
+                            <td class="p-3 border-r font-medium">R$ ${r.vlrFreteOrigem.toFixed(2)}</td>
+                            <td class="p-3 border-r font-bold text-amber-700">${r.deducao1.toFixed(1)}%</td>
+                            <td class="p-3 border-r text-red-600 font-bold">R$ ${abatido1.toFixed(2)}</td>
+                            <td class="p-3 border-r font-black text-indigo-950 bg-indigo-50/30">R$ ${r.baseLiquida.toFixed(2)}</td>
+                            <td class="p-3 border-r font-bold text-amber-700">${r.deducao2.toFixed(1)}%</td>
+                            <td class="p-3 border-r text-red-600 font-bold">R$ ${abatido2.toFixed(2)}</td>
+                            <td class="p-3 border-r font-black text-indigo-950 bg-indigo-50/30">R$ ${base2.toFixed(2)}</td>
+                            <td class="p-3 border-r font-bold text-indigo-700">${r.pctAplicado}%</td>
+                            <td class="p-3 border-r font-black text-emerald-800 bg-emerald-50/30">R$ ${r.fretePercentualCalc1.toFixed(2)}</td>
+                            <td class="p-3 border-r font-black text-emerald-800 bg-emerald-50/30">R$ ${r.fretePercentualCalc2.toFixed(2)}</td>
+                            <td class="p-3 border-r">${(r.pesoCalc || 0).toFixed(2)}</td>
+                            <td class="p-3 border-r text-red-600 font-bold">${(r.retirarPeso || 0).toFixed(2)}</td>
+                            <td class="p-3 border-r font-bold text-slate-800">${pesoAbat.toFixed(2)}</td>
+                            <td class="p-3 border-r">R$ ${(r.pesoAplicado || 0).toFixed(4)}</td>
+                            <td class="p-3 border-r font-bold text-sky-900 bg-sky-50/40">R$ ${(r.fretePesoPlanilha || 0).toFixed(2)}</td>
+                            <td class="p-3 border-r font-black text-emerald-800 bg-emerald-50/30">R$ ${r.fretePesoCalc.toFixed(2)}</td>
+                            <td class="p-3 border-r ${r.eMinimoCadastrado ? 'font-bold text-indigo-800' : 'text-slate-400'}">${r.eMinimoCadastrado ? `R$ ${r.rateMinimo.toFixed(2)}` : '—'}</td>
+                            <td class="p-3 border-r font-black text-indigo-950 bg-indigo-100/60">R$ ${r.novoParametroCalc.toFixed(2)}</td>
+                            <td class="p-3 border-r font-bold text-sky-900 bg-sky-50/40">R$ ${r.freteValorPlanilha.toFixed(2)}</td>
+                            <td class="p-3 border-r font-bold ${Math.abs(diferenca) <= 0.05 ? 'text-emerald-700' : 'text-red-700'}">R$ ${diferenca.toFixed(2)}</td>
+                            <td class="p-3 text-center whitespace-nowrap">
+                                <span class="px-2 py-1 rounded text-[11px] font-black tracking-wide ${r.isOK ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300'}">${r.statusText}</span>
+                            </td>
+                        `;
+                        taxTbody.appendChild(tr);
+                    });
+                }
+            }
+
+            // ===== Renderiza Conferência de Pedágio / GRIS / Despacho =====
+            const extrasTbody = document.getElementById('audit-extras-tbody');
+            if (extrasTbody) {
+                extrasTbody.innerHTML = '';
+                if (resultadosConf.length === 0) {
+                    extrasTbody.innerHTML = `<tr><td colspan="10" class="text-center py-8 text-slate-400">Nenhum registro encontrado.</td></tr>`;
+                } else {
+                    resultadosConf.forEach(r => {
+                        const tr = document.createElement('tr');
+                        tr.className = r.resultadoConf === 'OK' ? "hover:bg-slate-50 transition" : "bg-red-50/50 hover:bg-red-100/50 transition";
+                        const cellCalc = (ok, calc, sheet) =>
+                            `<span class="${ok ? 'text-emerald-700' : 'text-red-700'} font-bold">R$ ${calc.toFixed(2)}${ok ? ' ✓' : ` (plan: R$ ${sheet.toFixed(2)})`}</span>`;
+                        tr.innerHTML = `
+                            <td class="p-3 border-r font-medium text-slate-700">${r.ctrc}</td>
+                            <td class="p-3 border-r">R$ ${r.pedagioSheet.toFixed(2)}</td>
+                            <td class="p-3 border-r">${r.pesoCalc.toFixed(2)}</td>
+                            <td class="p-3 border-r">R$ ${r.valMercadoriaSheet.toFixed(2)}</td>
+                            <td class="p-3 border-r">R$ ${r.grisSheet.toFixed(2)}</td>
+                            <td class="p-3 border-r">R$ ${r.despachoSheet.toFixed(2)}</td>
+                            <td class="p-3 border-r bg-emerald-50/50">${cellCalc(r.pedOK, r.pedCalc, r.pedagioSheet)}</td>
+                            <td class="p-3 border-r bg-amber-50/50">${cellCalc(r.grisOK, r.grisCalc, r.grisSheet)}</td>
+                            <td class="p-3 border-r bg-sky-50/50">${cellCalc(r.despOK, r.despCalc, r.despachoSheet)}</td>
+                            <td class="p-3 text-center whitespace-nowrap">
+                                <span class="px-2 py-1 rounded text-[11px] font-black tracking-wide ${r.resultadoConf === 'OK' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300'}">
+                                    ${r.resultadoConf}
+                                </span>
+                            </td>
+                        `;
+                        extrasTbody.appendChild(tr);
+                    });
+                }
+            }
+
+            aplicarColunasOcultasAuditoria();
+
+            // ===== Renderiza Fretes vs Receitas =====
+            filtroGraficoFretes = null;
+            renderizarTabelaFretes(resultadosFiltrados);
+
+            montarControleColunasImpostos();
+            aplicarColunasOcultasImpostos();
+            renderizarGraficosFretes(resultadosFiltrados);
+        }
+
+        function filtrarTabela() {
+            renderizarTabelasComFiltro();
+        }
+
+        // ===== INCLUIR PARCEIRO: grava o nome digitado na coluna PARCEIRO da planilha importada =====
+        function salvarParceiroNaPlanilha() {
+            const input = document.getElementById('in-incluir-parceiro');
+            const nome = (input?.value || '').trim();
+            const msg = document.getElementById('msg-parceiro-salvo');
+
+            if (!nome) {
+                alert("Digite o nome do parceiro em 'Incluir Parceiro'.");
+                return;
+            }
+            if (!rawExcelData || rawExcelData.length === 0) {
+                alert("Importe a planilha (Base_Dados.xlsx) antes de incluir o parceiro.");
+                return;
+            }
+
+
+            // Aplica SOMENTE nos dados filtrados atualmente exibidos, sem recorrer à base completa
+            const baseFiltrada = Array.isArray(resultadosFiltradosAtuais)
+                ? resultadosFiltradosAtuais
+                : [];
+
+            if (baseFiltrada.length === 0) {
+                if (msg) {
+                    msg.innerHTML = `<strong>0</strong> registro(s) atualizado(s). O filtro atual não possui dados elegíveis.`;
+                }
+                return;
+            }
+
+            const indicesFiltrados = Array.from(new Set(
+                baseFiltrada.map(r => r.idxLinha).filter(i => Number.isInteger(i) && i >= 0)
+            ));
+
+            let gravadas = 0;
+            indicesFiltrados.forEach(i => {
+                const row = rawExcelData[i];
+                if (!row) return;
+                const atual = (row['PARCEIRO'] === undefined || row['PARCEIRO'] === null) ? '' : String(row['PARCEIRO']).trim();
+                if (atual === '' || atual === '-') {
+                    row['PARCEIRO'] = nome;
+                    gravadas++;
+                }
+            });
+
+            localStorage.setItem('auditor_parceiro_incluido', nome);
+            montarFiltrosDinâmicosParceiro();
+            recalcular();
+
+            if (msg) {
+                msg.innerHTML = `<strong>${gravadas}</strong> de <strong>${indicesFiltrados.length}</strong> registro(s) filtrado(s) com <strong>PARCEIRO</strong> em branco preenchido(s) com <strong>${nome}</strong>. Registros já preenchidos foram mantidos. Recálculo executado.`;
+            }
+        }
+
+        async function salvarWorkbookComEscolha(wb, nomeSugerido) {
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: nomeSugerido,
+                        types: [{ description: 'Planilha Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }]
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    return;
+                } catch (err) {
+                    if (err && err.name === 'AbortError') return;
+                }
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nomeSugerido;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        async function baixarPlanilhaComParceiro() {
+            if (!rawExcelData || rawExcelData.length === 0) {
+                alert("Nenhuma planilha importada para exportar.");
+                return;
+            }
+            const ws = XLSX.utils.json_to_sheet(rawExcelData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Base_Dados");
+            await salvarWorkbookComEscolha(wb, `Base_Dados_Parceiro_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }
+
+        // ===== OCULTAR / EXIBIR COLUNAS DA TABELA "RESULTADO DA CONFERÊNCIA E AUDITORIA" =====
+        function montarControleColunasAuditoria() {
+            const container = document.getElementById('container-colunas-auditoria');
+            const tabela = document.getElementById('tabela-auditoria');
+            if (!container || !tabela || container.dataset.montado === '1') return;
+
+            const ths = Array.from(tabela.querySelectorAll('thead th'));
+            container.innerHTML = '';
+            ths.forEach((th, idx) => {
+                const label = document.createElement('label');
+                label.className = "flex items-center space-x-1.5 cursor-pointer bg-slate-50 border border-slate-200 rounded px-1.5 py-1";
+                label.innerHTML = `
+                    <input type="checkbox" checked data-col="${idx}" onchange="alternarColunaAuditoria(${idx}, this.checked)" class="chk-coluna-auditoria rounded text-indigo-600">
+                    <span class="truncate" title="${th.textContent.trim()}">${th.textContent.trim()}</span>
+                `;
+                container.appendChild(label);
+            });
+            container.dataset.montado = '1';
+        }
+
+        function alternarColunaAuditoria(idx, visivel) {
+            const tabela = document.getElementById('tabela-auditoria');
+            if (!tabela) return;
+            tabela.querySelectorAll('thead tr').forEach(tr => {
+                const cel = tr.children[idx];
+                if (cel) cel.style.display = visivel ? '' : 'none';
+            });
+            tabela.querySelectorAll('tbody tr').forEach(tr => {
+                if (tr.children.length <= 1) return; // linha de mensagem com colspan
+                const cel = tr.children[idx];
+                if (cel) cel.style.display = visivel ? '' : 'none';
+            });
+        }
+
+        function aplicarColunasOcultasAuditoria() {
+            document.querySelectorAll('.chk-coluna-auditoria').forEach(cb => {
+                if (!cb.checked) alternarColunaAuditoria(parseInt(cb.dataset.col, 10), false);
+            });
+        }
+
+        function exibirTodasColunasAuditoria() {
+            document.querySelectorAll('.chk-coluna-auditoria').forEach(cb => {
+                cb.checked = true;
+                alternarColunaAuditoria(parseInt(cb.dataset.col, 10), true);
+            });
+        }
+
+        // ===== TABELA / FILTRO INTERATIVO DA GUIA FRETES VS RECEITAS =====
+        let fretesBaseAtual = [];
+        let filtroGraficoFretes = null;
+
+        function renderizarTabelaFretes(resultadosFiltrados) {
+            const fretesTbody = document.getElementById('fretes-tbody');
+            if (fretesTbody) {
+                fretesTbody.innerHTML = '';
+                if (!resultadosFiltrados || resultadosFiltrados.length === 0) {
+                    fretesTbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-400">Nenhum dado carregado.</td></tr>`;
+                } else {
+                    resultadosFiltrados.forEach(r => {
+                        const negativo = r.saldo < 0;
+                        const tdeAlerta = r.tdeClaro < r.tdeParceiro;
+                        const tdaAlerta = r.tdaClaro < r.tdaParceiro;
+                        const tr = document.createElement('tr');
+                        tr.className = negativo ? "bg-red-100/60 hover:bg-red-200/60 transition" : "hover:bg-slate-50 transition";
+                        const resClass = r.resultadoFretes === 'OK'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : 'bg-amber-100 text-amber-800 border border-amber-300';
+                        tr.innerHTML = `
+                            <td class="p-3 border-r font-medium text-slate-700">${r.ctrcOrigem}</td>
+                            <td class="p-3 border-r font-semibold">R$ ${r.vlrFreteOrigem.toFixed(2)}</td>
+                            <td class="p-3 border-r font-semibold">R$ ${r.freteValorPlanilha.toFixed(2)}</td>
+                            <td class="p-3 border-r font-bold ${tdeAlerta ? 'bg-amber-200 text-amber-900 ring-1 ring-amber-500' : ''}">R$ ${r.tdeClaro.toFixed(2)}</td>
+                            <td class="p-3 border-r font-bold ${tdaAlerta ? 'bg-amber-200 text-amber-900 ring-1 ring-amber-500' : ''}">R$ ${r.tdaClaro.toFixed(2)}</td>
+                            <td class="p-3 border-r font-bold ${tdeAlerta ? 'bg-amber-200 text-amber-900 ring-1 ring-amber-500' : ''}">R$ ${r.tdeParceiro.toFixed(2)}</td>
+                            <td class="p-3 border-r font-bold ${tdaAlerta ? 'bg-amber-200 text-amber-900 ring-1 ring-amber-500' : ''}">R$ ${r.tdaParceiro.toFixed(2)}</td>
+                            <td class="p-3 border-r font-black ${negativo ? 'text-red-700 bg-red-50' : 'text-emerald-700'}">R$ ${r.saldo.toFixed(2)}</td>
+                            <td class="p-3 text-center whitespace-nowrap">
+                                <span class="px-2 py-1 rounded text-[11px] font-black tracking-wide ${resClass}">${r.resultadoFretes}</span>
+                            </td>
+                        `;
+                        fretesTbody.appendChild(tr);
+                    });
+                }
+            }
+        }
+
+        // ===== GRÁFICOS DA GUIA FRETES VS RECEITAS =====
+        function renderizarGraficosFretes(lista) {
+            if (typeof Chart === 'undefined') return;
+            const dados = (lista && lista.length) ? lista : [];
+            fretesBaseAtual = dados;
+            const soma = (fn) => dados.reduce((a, r) => a + (fn(r) || 0), 0);
+
+            const freteClaro = soma(r => r.vlrFreteOrigem);
+            const freteParceiro = soma(r => r.freteValorPlanilha);
+            const tdeClaro = soma(r => r.tdeClaro);
+            const tdaClaro = soma(r => r.tdaClaro);
+            const tdeParceiro = soma(r => r.tdeParceiro);
+            const tdaParceiro = soma(r => r.tdaParceiro);
+            const resultadoFinal = (tdeClaro + tdaClaro) - (tdeParceiro + tdaParceiro);
+            // TDE/TDA cobrado do parceiro sem cobrança correspondente da Claro (fica negativo)
+            const naoCobradoClaro = dados.reduce((acc, r) => {
+                let v = 0;
+                if ((r.tdeClaro || 0) <= 0 && (r.tdeParceiro || 0) > 0) v += (r.tdeParceiro || 0);
+                if ((r.tdaClaro || 0) <= 0 && (r.tdaParceiro || 0) > 0) v += (r.tdaParceiro || 0);
+                return acc + v;
+            }, 0);
+            const resultadoFinalAjustado = resultadoFinal;
+            const saldoPositivo = dados.filter(r => r.saldo >= 0).reduce((a, r) => a + r.saldo, 0);
+            const saldoNegativo = dados.filter(r => r.saldo < 0).reduce((a, r) => a + r.saldo, 0);
+            const saldoTotal = saldoPositivo + saldoNegativo;
+            const totalMenos = saldoTotal - Math.abs(saldoNegativo);
+
+            const brl = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const baseOpts = {
+                responsive: true,
+                maintainAspectRatio: false,
+                onHover: (evt, els, chart) => {
+                    const alvo = (els && els.length) ? els : chart.getElementsAtEventForMode(evt.native || evt, 'index', { intersect: false, axis: 'x' }, true);
+                    evt.native.target.style.cursor = (alvo && alvo.length) ? 'pointer' : 'default';
+                },
+                interaction: { mode: 'index', intersect: false, axis: 'x' },
+                onClick: (evt, els, chart) => {
+                    let alvo = els;
+                    if (!alvo || !alvo.length) {
+                        alvo = chart.getElementsAtEventForMode(evt.native || evt, 'index', { intersect: false, axis: 'x' }, true);
+                    }
+                    if (!alvo || !alvo.length) return;
+                    aplicarFiltroGrafico(chart.canvas.id.replace('-expandido', ''), alvo[0].index);
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (c) => brl(c.parsed.y ?? c.parsed) } }
+                },
+                scales: { y: { beginAtZero: true, ticks: { callback: (v) => brl(v) , font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } }
+            };
+
+            // ===== Ajuste automático da largura das colunas dos gráficos =====
+            const ajustarEspessuraBarras = (chart) => {
+                if (!chart || !chart.data) return false;
+                const n = (chart.data.labels || []).length || 1;
+                // usa a largura visível do canvas (atualiza imediatamente no resize),
+                // descontando o espaço do eixo Y
+                const larguraCanvas = chart.canvas?.clientWidth || chart.width || 300;
+                const larguraPlot = Math.max(60, larguraCanvas - 70);
+                const area = chart.chartArea;
+                const largura = Math.max(larguraPlot, (area && area.width) ? area.width : 0);
+                const alvo = Math.max(14, Math.min(96, Math.round((largura / n) * 0.62)));
+                let mudou = false;
+                (chart.data.datasets || []).forEach(d => {
+                    if (d.maxBarThickness !== alvo) { d.maxBarThickness = alvo; mudou = true; }
+                    d.barPercentage = 0.9;
+                    d.minBarLength = 8;
+                    d.categoryPercentage = n <= 2 ? 0.55 : (n <= 4 ? 0.7 : 0.85);
+                });
+                return mudou;
+            };
+
+            const desenhar = (id, cfg) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                // largura inicial estimada pela caixa do canvas
+                const nLabels = (cfg.data.labels || []).length || 1;
+                const larguraCanvas = Math.max(60, (el.clientWidth || el.parentElement?.clientWidth || 300) - 70);
+                cfg.data.datasets.forEach(d => {
+                    d.maxBarThickness = Math.max(14, Math.min(96, Math.round((larguraCanvas / nLabels) * 0.62)));
+                    d.barPercentage = 0.9;
+                    d.minBarLength = 8;
+                    d.categoryPercentage = nLabels <= 2 ? 0.55 : (nLabels <= 4 ? 0.7 : 0.85);
+                });
+                cfg.options = { ...(cfg.options || {}), onResize: (chart) => {
+                    if (ajustarEspessuraBarras(chart)) chart.update('none');
+                    setTimeout(() => { if (ajustarEspessuraBarras(chart)) chart.update('none'); }, 60);
+                } };
+                const ds = cfg.data.datasets[0];
+                const cores = Array.isArray(ds.backgroundColor) ? ds.backgroundColor.slice() : ds.backgroundColor;
+                if (Array.isArray(cores)) {
+                    const sel = (filtroGraficoFretes && filtroGraficoFretes.chartId === id) ? filtroGraficoFretes.index : -1;
+                    ds.backgroundColor = cores.map((c, i) => (sel >= 0 && i !== sel) ? c + '40' : c);
+                    ds.borderColor = cores.map((c, i) => (i === sel) ? '#0f172a' : 'transparent');
+                    ds.borderWidth = cores.map((c, i) => (i === sel) ? 2 : 0);
+                }
+                if (graficosFretes[id]) graficosFretes[id].destroy();
+                graficosFretes[id] = new Chart(el, cfg);
+                configsGraficosFretes[id] = cfg;
+                if (graficoExpandido === id) redesenharGraficoExpandido();
+                // reajusta após o layout real (largura definitiva do container)
+                const reajustar = () => {
+                    const c = graficosFretes[id];
+                    if (c && ajustarEspessuraBarras(c)) c.update('none');
+                };
+                requestAnimationFrame(reajustar);
+                setTimeout(reajustar, 60);
+                setTimeout(reajustar, 350);
+                if (typeof ResizeObserver !== 'undefined' && el.parentElement) {
+                    try {
+                        if (el._obsBarras) el._obsBarras.disconnect();
+                        el._obsBarras = new ResizeObserver(() => reajustar());
+                        el._obsBarras.observe(el.parentElement);
+                    } catch (e) {}
+                }
+            };
+
+            desenhar('chart-frete-total', {
+                type: 'bar',
+                data: {
+                    labels: ['Frete Claro', 'Frete Parceiro'],
+                    datasets: [{ data: [freteClaro, freteParceiro], backgroundColor: ['#059669', '#4f46e5'] }]
+                },
+                options: baseOpts
+            });
+
+            desenhar('chart-tde-tda', {
+                type: 'bar',
+                data: {
+                    labels: ['TDE Claro', 'TDA Claro', 'TDE Parceiro', 'TDA Parceiro', 'Não cobrado p/ Claro', 'Resultado Final'],
+                    datasets: [{
+                        data: [tdeClaro, tdaClaro, tdeParceiro, tdaParceiro, -naoCobradoClaro, resultadoFinalAjustado],
+                        backgroundColor: ['#0ea5e9', '#38bdf8', '#f59e0b', '#fbbf24', '#dc2626', resultadoFinalAjustado >= 0 ? '#059669' : '#dc2626']
+                    }]
+                },
+                options: { ...baseOpts, scales: { y: { ticks: { callback: (v) => brl(v), font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } } }
+            });
+
+            const pctParceiroClaro = freteClaro > 0 ? (freteParceiro / freteClaro) * 100 : 0;
+            const elPct = document.getElementById('card-pct-parceiro-claro');
+            if (elPct) {
+                elPct.textContent = pctParceiroClaro.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' %';
+                elPct.className = 'text-2xl font-bold mt-1 ' + (pctParceiroClaro > 100 ? 'text-red-600' : 'text-indigo-900');
+            }
+            const elPctSub = document.getElementById('card-pct-parceiro-claro-sub');
+            if (elPctSub) elPctSub.textContent = `Frete Parceiro ${brl(freteParceiro)} / Frete Claro ${brl(freteClaro)}`;
+
+            const elNota = document.getElementById('nota-tde-tda');
+            if (elNota) {
+                elNota.textContent = naoCobradoClaro > 0
+                    ? `Atenção: ${brl(naoCobradoClaro)} de TDE/TDA cobrados pelo parceiro sem cobrança da Claro — informativo (já incluído no TDE/TDA Parceiro).`
+                    : 'Todo TDE/TDA cobrado pelo parceiro possui cobrança correspondente da Claro.';
+                elNota.className = 'text-[10px] mt-1 ' + (naoCobradoClaro > 0 ? 'text-red-600 font-semibold' : 'text-slate-500');
+            }
+
+            desenhar('chart-saldo', {
+                type: 'bar',
+                data: {
+                    labels: ['Saldo', 'Negativo', 'Total Menos(-)'],
+                    datasets: [{ data: [saldoTotal, saldoNegativo, totalMenos], backgroundColor: ['#059669', '#dc2626', '#3b82f6'] }]
+                },
+                options: { ...baseOpts, scales: { y: { ticks: { callback: (v) => brl(v), font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } } }
+            });
+        }
+
+
+
+        // ===== EXPANDIR GRÁFICOS =====
+        const titulosGraficosFretes = {
+            'chart-frete-total': 'Frete Total — Claro vs Parceiro',
+            'chart-tde-tda': 'TDE / TDA vs Resultado Final',
+            'chart-saldo': 'Saldo — Positivo vs Negativo'
+        };
+        let chartExpandidoInstancia = null;
+
+        function expandirGrafico(id) {
+            const modal = document.getElementById('modal-grafico');
+            if (!modal || !configsGraficosFretes[id]) return;
+            graficoExpandido = id;
+            const titulo = document.getElementById('titulo-grafico-expandido');
+            if (titulo) titulo.textContent = titulosGraficosFretes[id] || 'Gráfico';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            redesenharGraficoExpandido();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function redesenharGraficoExpandido() {
+            const id = graficoExpandido;
+            const base = id ? configsGraficosFretes[id] : null;
+            const el = document.getElementById('canvas-grafico-expandido');
+            if (!base || !el) return;
+            const cfg = {
+                type: base.type,
+                data: {
+                    labels: (base.data.labels || []).slice(),
+                    datasets: (base.data.datasets || []).map(d => {
+                        const copia = { ...d };
+                        copia.data = (d.data || []).slice();
+                        ['backgroundColor', 'borderColor', 'borderWidth'].forEach(k => {
+                            if (Array.isArray(d[k])) copia[k] = d[k].slice();
+                        });
+                        delete copia.maxBarThickness;
+                        copia.minBarLength = 10;
+                        copia.barPercentage = 0.9;
+                        copia.categoryPercentage = 0.7;
+                        return copia;
+                    })
+                },
+                options: { ...(base.options || {}), onResize: undefined }
+            };
+            if (chartExpandidoInstancia) chartExpandidoInstancia.destroy();
+            chartExpandidoInstancia = new Chart(el, cfg);
+        }
+
+        function fecharGraficoExpandido() {
+            const modal = document.getElementById('modal-grafico');
+            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+            if (chartExpandidoInstancia) { chartExpandidoInstancia.destroy(); chartExpandidoInstancia = null; }
+            graficoExpandido = null;
+        }
+
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharGraficoExpandido(); });
+
+        // ===== FILTRO INTERATIVO A PARTIR DOS GRÁFICOS =====
+        const filtrosGraficoFretes = {
+            'chart-frete-total': [
+                { rotulo: 'Frete Claro (> 0)', fn: r => (r.vlrFreteOrigem || 0) > 0 },
+                { rotulo: 'Frete Parceiro (> 0)', fn: r => (r.freteValorPlanilha || 0) > 0 }
+            ],
+            'chart-tde-tda': [
+                { rotulo: 'TDE Claro (> 0)', fn: r => (r.tdeClaro || 0) > 0 },
+                { rotulo: 'TDA Claro (> 0)', fn: r => (r.tdaClaro || 0) > 0 },
+                { rotulo: 'TDE Parceiro (> 0)', fn: r => (r.tdeParceiro || 0) > 0 },
+                { rotulo: 'TDA Parceiro (> 0)', fn: r => (r.tdaParceiro || 0) > 0 },
+                { rotulo: 'Não cobrado p/ Claro', fn: r => (((r.tdeClaro || 0) <= 0 && (r.tdeParceiro || 0) > 0) || ((r.tdaClaro || 0) <= 0 && (r.tdaParceiro || 0) > 0)) },
+                { rotulo: 'Resultado Final (TDE/TDA movimentados)', fn: r => ((r.tdeClaro || 0) + (r.tdaClaro || 0) + (r.tdeParceiro || 0) + (r.tdaParceiro || 0)) !== 0 }
+            ],
+            'chart-saldo': [
+                { rotulo: 'Saldo', fn: r => (r.saldo || 0) >= 0 },
+                { rotulo: 'Negativo', fn: r => (r.saldo || 0) < 0 },
+                { rotulo: 'Total Menos(-)', fn: r => true }
+            ]
+        };
+
+        function aplicarFiltroGrafico(chartId, index) {
+            const conf = (filtrosGraficoFretes[chartId] || [])[index];
+            if (!conf) return;
+            const jaAtivo = filtroGraficoFretes && filtroGraficoFretes.chartId === chartId && filtroGraficoFretes.index === index;
+            filtroGraficoFretes = jaAtivo ? null : { chartId, index, rotulo: conf.rotulo, fn: conf.fn };
+            atualizarVisaoFiltradaFretes();
+        }
+
+        function limparFiltroGrafico() {
+            filtroGraficoFretes = null;
+            atualizarVisaoFiltradaFretes();
+        }
+
+        function atualizarVisaoFiltradaFretes() {
+            const base = fretesBaseAtual || [];
+            const lista = filtroGraficoFretes ? base.filter(filtroGraficoFretes.fn) : base;
+            renderizarTabelaFretes(lista);
+
+            const barra = document.getElementById('barra-filtro-grafico');
+            const rotulo = document.getElementById('rotulo-filtro-grafico');
+            const contagem = document.getElementById('contagem-filtro-grafico');
+            if (barra) barra.classList.toggle('hidden', !filtroGraficoFretes);
+            if (rotulo && filtroGraficoFretes) rotulo.textContent = filtroGraficoFretes.rotulo;
+            if (contagem) contagem.textContent = `${lista.length} de ${base.length} registro(s)`;
+
+            // Redesenha os gráficos mantendo a base completa, apenas destacando a seleção
+            const filtroAtual = filtroGraficoFretes;
+            renderizarGraficosFretes(base);
+            filtroGraficoFretes = filtroAtual;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // ===== OCULTAR / EXIBIR COLUNAS DA GUIA DE DEDUÇÃO DE IMPOSTOS =====
+        function montarControleColunasImpostos() {
+            const container = document.getElementById('container-colunas-impostos');
+            const tabela = document.getElementById('tabela-impostos');
+            if (!container || !tabela || container.dataset.montado === '1') return;
+
+            const ths = Array.from(tabela.querySelectorAll('thead th'));
+            container.innerHTML = '';
+            ths.forEach((th, idx) => {
+                const label = document.createElement('label');
+                label.className = "flex items-center space-x-1.5 cursor-pointer bg-slate-50 border border-slate-200 rounded px-1.5 py-1";
+                label.innerHTML = `
+                    <input type="checkbox" checked data-col="${idx}" onchange="alternarColunaImpostos(${idx}, this.checked)" class="chk-coluna-impostos rounded text-indigo-600">
+                    <span class="truncate" title="${th.textContent.trim()}">${th.textContent.trim()}</span>
+                `;
+                container.appendChild(label);
+            });
+            container.dataset.montado = '1';
+        }
+
+        function alternarColunaImpostos(idx, visivel) {
+            const tabela = document.getElementById('tabela-impostos');
+            if (!tabela) return;
+            tabela.querySelectorAll('thead tr').forEach(tr => {
+                const cel = tr.children[idx];
+                if (cel) cel.style.display = visivel ? '' : 'none';
+            });
+            tabela.querySelectorAll('tbody tr').forEach(tr => {
+                if (tr.children.length <= 1) return;
+                const cel = tr.children[idx];
+                if (cel) cel.style.display = visivel ? '' : 'none';
+            });
+        }
+
+        function aplicarColunasOcultasImpostos() {
+            document.querySelectorAll('.chk-coluna-impostos').forEach(cb => {
+                if (!cb.checked) alternarColunaImpostos(parseInt(cb.dataset.col, 10), false);
+            });
+        }
+
+        function exibirTodasColunasImpostos() {
+            document.querySelectorAll('.chk-coluna-impostos').forEach(cb => {
+                cb.checked = true;
+                alternarColunaImpostos(parseInt(cb.dataset.col, 10), true);
+            });
+        }
+
+        // ===== LINHAS COMPLETAS (todas as colunas) PARA EXPORTAÇÃO / HISTÓRICO =====
+        function montarLinhasCompletas(lista) {
+            return (lista || []).map(r => ({
+                "Nº CTRC": r.ctrc,
+                "CTRC Origem": r.ctrcOrigem,
+                "Nº FATURA": r.numeroFatura,
+                "PARCEIRO": r.parceiro,
+                "Vlr Frete Origem": r.vlrFreteOrigem,
+                "Dedução 1 (%)": r.deducao1,
+                "Dedução 2 (%)": r.deducao2,
+                "Base Líquida Calc": r.baseLiquida,
+                "Val Receber (Planilha)": r.freteValorPlanilha,
+                "Frete Valor (Planilha)": r.freteValorPuroPlanilha,
+                "Frete % Calc c/ ICMS": r.fretePercentualCalcCIcms,
+                "Frete % Calc": r.fretePercentualCalc1,
+                "Frete % Calc (Ded 2)": r.fretePercentualCalc2,
+                "Taxa Frete % Aplicada": r.pctAplicado,
+                "Peso Calc (Planilha)": r.pesoCalc,
+                "Retirar Peso (Kg)": r.retirarPeso,
+                "Peso Abatido (Kg)": r.pesoAbatido,
+                "Taxa Peso Aplicada": r.pesoAplicado,
+                "Frete Peso (Planilha)": r.fretePesoPlanilha,
+                "Frete Peso Calc": r.fretePesoCalc,
+                "Frete Calc (c/ Retirar Peso)": r.novoParametroCalc,
+                "Regra Frete Mínimo Ativa": r.eMinimoCadastrado ? `Sim (R$ ${r.rateMinimo.toFixed(2)})` : 'Não',
+                "Pedágio (Planilha)": r.pedagioSheet,
+                "Val Mercadoria (Planilha)": r.valMercadoriaSheet,
+                "GRIS (Planilha)": r.grisSheet,
+                "Despacho (Planilha)": r.despachoSheet,
+                "PED CALC": r.pedCalc,
+                "GRIS CALC": r.grisCalc,
+                "DESP CALC": r.despCalc,
+                "Resultado (Ped/GRIS/Desp)": r.resultadoConf,
+                "Frete Claro": r.vlrFreteOrigem,
+                "Frete Parceiro": r.freteValorPlanilha,
+                "TDE Claro": r.tdeClaro,
+                "TDA Claro": r.tdaClaro,
+                "TDE Parceiro": r.tdeParceiro,
+                "TDA Parceiro": r.tdaParceiro,
+                "Saldo$": r.saldo,
+                "Resultado Fretes vs Receitas": r.resultadoFretes,
+                "Status Auditoria": r.statusText
+            }));
+        }
+
+        async function exportarExcel() {
+            if (!auditResults || auditResults.length === 0) return;
+
+            const dataToExport = montarLinhasCompletas(
+                (resultadosFiltradosAtuais && resultadosFiltradosAtuais.length > 0) ? resultadosFiltradosAtuais : auditResults
+            );
+
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Auditoria_Conferida");
+            await salvarWorkbookComEscolha(wb, `Auditoria_Fretes_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }
+
+        function limparDadosImportados() {
+            if (confirm("Deseja realmente limpar todos os dados de todas as guias?")) {
+                rawExcelData = [];
+                auditResults = [];
+                resultadosFiltradosAtuais = [];
+
+                const vazio = (id, cols, msg) => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerHTML = `<tr><td colspan="${cols}" class="text-center py-8 text-slate-400">${msg}</td></tr>`;
+                };
+                vazio('audit-tbody', 17, 'Nenhum dado carregado. Por favor, importe o arquivo Fatura.xlsx.');
+                vazio('audit-extras-tbody', 10, 'Nenhum dado carregado. Por favor, importe o arquivo Fatura.xlsx.');
+                vazio('tax-tbody', 23, 'Nenhum dado carregado. Importe a planilha na aba de Auditoria.');
+                vazio('fretes-tbody', 9, 'Nenhum dado carregado. Importe a planilha na aba de Auditoria.');
+
+                // KPIs
+                ['kpi-total-ctrc', 'kpi-divergencias'].forEach(id => {
+                    const el = document.getElementById(id); if (el) el.textContent = '0';
+                });
+                ['kpi-frete-valor', 'kpi-frete-peso', 'kpi-media-mensal'].forEach(id => {
+                    const el = document.getElementById(id); if (el) el.textContent = 'R$ 0,00';
+                });
+                ['kpi-frete-valor-diff', 'kpi-frete-peso-diff'].forEach(id => {
+                    const el = document.getElementById(id); if (el) el.textContent = 'Diff: R$ 0,00';
+                });
+                const elProp = document.getElementById('kpi-percentual-proporcao');
+                if (elProp) elProp.textContent = '0.00 %';
+                const elSub = document.getElementById('kpi-media-mensal-sub');
+                if (elSub) elSub.textContent = 'por mês com registros';
+
+                // Card e gráficos da guia Fretes vs Receitas
+                const elPct = document.getElementById('card-pct-parceiro-claro');
+                if (elPct) elPct.textContent = '0,00 %';
+                const elPctSub = document.getElementById('card-pct-parceiro-claro-sub');
+                if (elPctSub) elPctSub.textContent = 'Frete Parceiro R$ 0,00 / Frete Claro R$ 0,00';
+                const elTdeNota = document.getElementById('nota-tde-tda');
+                if (elTdeNota) elTdeNota.textContent = '';
+                Object.keys(graficosFretes).forEach(k => { try { graficosFretes[k].destroy(); } catch (e) {} delete graficosFretes[k]; });
+                fretesBaseAtual = [];
+                filtroGraficoFretes = null;
+                const barraFiltroGraf = document.getElementById('barra-filtro-grafico');
+                if (barraFiltroGraf) barraFiltroGraf.classList.add('hidden');
+
+                // Filtros
+                const inputBusca = document.getElementById('in-filtro-busca-texto');
+                if (inputBusca) inputBusca.value = '';
+                document.querySelectorAll('.chk-filtro-status, .chk-filtro-minimo, .chk-filtro-conf').forEach(c => c.checked = true);
+                const contParc = document.getElementById('container-filtro-parceiros');
+                if (contParc) contParc.innerHTML = '<span class="text-slate-400 text-[11px]">Nenhum parceiro carregado</span>';
+
+                // Colunas ocultas voltam a aparecer
+                if (typeof exibirTodasColunasAuditoria === 'function') exibirTodasColunasAuditoria();
+                if (typeof exibirTodasColunasImpostos === 'function') exibirTodasColunasImpostos();
+
+                document.getElementById('kpi-container').classList.add('hidden');
+                document.getElementById('btn-export').classList.add('hidden');
+                document.getElementById('btn-limpar-dados').classList.add('hidden');
+                document.getElementById('btn-salvar-historico').classList.add('hidden');
+            }
+        }
+        // ===== GUIA: IMPORTAR E TRANSFORMAR DADOS =====
+        let dadosTransformados = [];
+        let arquivosTransfImportados = [];
+        let pastaDestinoTransf = null;
+
+
+        // --- Leitura robusta de arquivos (corrige acentuacao/latin-1 e colunas vazias) ---
+        function limparCelulaTransf(v) {
+            if (v === undefined || v === null) return '';
+            // NBSP (0xA0) e caracteres de controle viram vazio; nao deslocam colunas
+            const s = String(v).replace(/[\u00A0\u0000-\u001F\u007F]/g, ' ').trim();
+            return s;
+        }
+
+        function decodificarTexto(buffer) {
+            const bytes = new Uint8Array(buffer);
+            // BOM UTF-8
+            if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+                return new TextDecoder('utf-8').decode(bytes.subarray(3));
+            }
+            const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+            // Se aparecer caractere de substituicao, o arquivo nao e UTF-8: usa windows-1252 (padrao BR)
+            if (utf8.indexOf('\uFFFD') !== -1) {
+                return new TextDecoder('windows-1252').decode(bytes);
+            }
+            return utf8;
+        }
+
+        function detectarSeparador(linha) {
+            const cands = [';', '\t', ','];
+            let melhor = ';', max = -1;
+            cands.forEach(c => {
+                const n = linha.split(c).length;
+                if (n > max) { max = n; melhor = c; }
+            });
+            return melhor;
+        }
+
+        function parseLinhaCsv(linha, sep) {
+            const out = [];
+            let atual = '', dentroAspas = false;
+            for (let i = 0; i < linha.length; i++) {
+                const ch = linha[i];
+                if (dentroAspas) {
+                    if (ch === '"') {
+                        if (linha[i + 1] === '"') { atual += '"'; i++; }
+                        else dentroAspas = false;
+                    } else atual += ch;
+                } else if (ch === '"') dentroAspas = true;
+                else if (ch === sep) { out.push(limparCelulaTransf(atual)); atual = ''; }
+                else atual += ch;
+            }
+            out.push(limparCelulaTransf(atual));
+            return out;
+        }
+
+        async function lerMatrizArquivo(arquivo) {
+            const buffer = await arquivo.arrayBuffer();
+            const ehTexto = /\.(csv|txt)$/i.test(arquivo.name || '');
+            if (ehTexto) {
+                // Parser proprio: preserva colunas vazias e nao converte datas/numeros
+                const texto = decodificarTexto(buffer);
+                const linhas = texto.split(/\r\n|\n|\r/).filter(l => l.length > 0);
+                if (!linhas.length) return [];
+                const sep = detectarSeparador(linhas[0]);
+                return linhas.map(l => parseLinhaCsv(l, sep));
+            }
+            const wb = XLSX.read(buffer, { type: 'array', raw: false, cellDates: false, codepage: 1252 });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const matriz = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false, raw: false });
+            return matriz.map(l => l.map(limparCelulaTransf));
+        }
+
+        function letraParaIndice(letra) {
+            const s = String(letra || 'DQ').toUpperCase().replace(/[^A-Z]/g, '') || 'DQ';
+            let n = 0;
+            for (const c of s) n = n * 26 + (c.charCodeAt(0) - 64);
+            return n - 1;
+        }
+
+        function valoresRemocaoTransf() {
+            return (document.getElementById('in-transf-remover').value || '0,9')
+                .split(',').map(v => v.trim()).filter(Boolean);
+        }
+
+        async function handleTransformUpload(event) {
+            const arquivos = Array.from(event.target.files || []);
+            if (!arquivos.length) return;
+            const remover = valoresRemocaoTransf();
+            const marcaCabecalho = (document.getElementById('in-transf-cabecalho').value || '1').trim();
+            const idxParceiro = letraParaIndice(document.getElementById('in-transf-coluna-parceiro').value);
+
+            let cabecalho = null;
+            const linhas = [];
+            let totalLidas = 0, totalRemovidas = 0, cabecalhosDescartados = 0;
+
+            for (const arquivo of arquivos) {
+                const matriz = await lerMatrizArquivo(arquivo);
+                matriz.forEach(linha => {
+                    const chave = String(linha[0] === undefined ? '' : linha[0]).trim();
+                    totalLidas++;
+                    if (remover.includes(chave)) { totalRemovidas++; return; }
+                    if (chave === marcaCabecalho) {
+                        if (!cabecalho) cabecalho = linha.slice();
+                        else cabecalhosDescartados++;
+                        return;
+                    }
+                    linhas.push(linha.slice());
+                });
+            }
+
+            if (!cabecalho) cabecalho = [];
+            while (cabecalho.length <= idxParceiro) cabecalho.push('');
+            cabecalho[idxParceiro] = 'PARCEIRO';
+            linhas.forEach(l => { while (l.length <= idxParceiro) l.push(''); });
+
+            dadosTransformados = [cabecalho, ...linhas];
+            arquivosTransfImportados = arquivos.map(a => a.name);
+            atualizarListaArquivosTransf();
+            document.getElementById('transf-resumo').innerHTML =
+                `<strong>${arquivos.length}</strong> arquivo(s) &bull; ${totalLidas} linha(s) lida(s) &bull; ` +
+                `${totalRemovidas} removida(s) pela coluna A (${remover.join(', ')}) &bull; ` +
+                `${cabecalhosDescartados} cabecalho(s) duplicado(s) descartado(s) &bull; ` +
+                `<strong>${linhas.length}</strong> linha(s) de dados prontas.`;
+            renderTabelaTransformada();
+            event.target.value = '';
+        }
+
+        function limparArquivosTransformados() {
+            if (!confirm('Deseja limpar os arquivos importados e iniciar uma nova conversao?')) return;
+            dadosTransformados = [];
+            arquivosTransfImportados = [];
+            const inp = document.getElementById('file-transformar');
+            if (inp) inp.value = '';
+            const tabela = document.getElementById('tabela-transformar');
+            if (tabela) tabela.querySelector('thead').innerHTML = '';
+            const tbody = document.getElementById('transf-tbody');
+            if (tbody) tbody.innerHTML = '<tr><td class="text-center py-8 text-slate-400">Nenhum arquivo importado ainda.</td></tr>';
+            const resumo = document.getElementById('transf-resumo');
+            if (resumo) resumo.innerHTML = '';
+            atualizarListaArquivosTransf();
+        }
+
+        function atualizarListaArquivosTransf() {
+            const el = document.getElementById('transf-arquivos');
+            const btn = document.getElementById('btn-limpar-transf');
+            const tem = arquivosTransfImportados.length > 0;
+            if (btn) btn.classList.toggle('hidden', !tem);
+            if (!el) return;
+            el.innerHTML = tem
+                ? '<strong>Arquivos importados:</strong> ' + arquivosTransfImportados.map(n => `<span class="inline-block bg-slate-100 border border-slate-200 rounded px-2 py-0.5 mr-1 mb-1">${n}</span>`).join('')
+                : '';
+        }
+
+        function renderTabelaTransformada() {
+            const tabela = document.getElementById('tabela-transformar');
+            const thead = tabela.querySelector('thead');
+            const tbody = document.getElementById('transf-tbody');
+            if (!dadosTransformados.length) return;
+            const [cabecalho, ...linhas] = dadosTransformados;
+            thead.innerHTML = `<tr>${cabecalho.map(c => `<th class="p-2 border-r">${c === '' ? '&nbsp;' : c}</th>`).join('')}</tr>`;
+            const amostra = linhas.slice(0, 100);
+            tbody.innerHTML = amostra.length
+                ? amostra.map(l => `<tr>${cabecalho.map((_, i) => `<td class="p-2 border-r">${l[i] === undefined ? '' : l[i]}</td>`).join('')}</tr>`).join('')
+                : `<tr><td colspan="${cabecalho.length}" class="text-center py-8 text-slate-400">Nenhuma linha de dados apos a limpeza.</td></tr>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        async function escolherPastaDestino() {
+            if (!window.showDirectoryPicker) {
+                alert('Seu navegador nao permite escolher a pasta. O arquivo sera salvo na pasta de downloads.');
+                return;
+            }
+            try {
+                pastaDestinoTransf = await window.showDirectoryPicker();
+                document.getElementById('lbl-pasta-destino').textContent = `Pasta escolhida: ${pastaDestinoTransf.name}`;
+            } catch (e) { /* cancelado pelo usuario */ }
+        }
+
+        async function salvarDadosTransformados(formato) {
+            if (!dadosTransformados.length) { alert('Importe ao menos um arquivo antes de salvar.'); return; }
+            const base = (document.getElementById('in-transf-nome-saida').value || 'Dados_Transformados').replace(/\.(xlsx|csv)$/i, '');
+            const nome = `${base}.${formato}`;
+            const ws = XLSX.utils.aoa_to_sheet(dadosTransformados);
+            let blob;
+            if (formato === 'csv') {
+                blob = new Blob(['\ufeff' + XLSX.utils.sheet_to_csv(ws, { FS: ';' })], { type: 'text/csv;charset=utf-8;' });
+            } else {
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Dados');
+                const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                blob = new Blob([out], { type: 'application/octet-stream' });
+            }
+            try {
+                if (pastaDestinoTransf) {
+                    const fh = await pastaDestinoTransf.getFileHandle(nome, { create: true });
+                    const w = await fh.createWritable();
+                    await w.write(blob); await w.close();
+                    alert(`Arquivo salvo em ${pastaDestinoTransf.name}/${nome}`);
+                    return;
+                }
+                if (window.showSaveFilePicker) {
+                    const fh = await window.showSaveFilePicker({ suggestedName: nome });
+                    const w = await fh.createWritable();
+                    await w.write(blob); await w.close();
+                    alert('Arquivo salvo com sucesso.');
+                    return;
+                }
+            } catch (e) {
+                if (e && e.name === 'AbortError') return;
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = nome; a.click();
+            URL.revokeObjectURL(url);
+        }
+    initSidebar();
+    </script>
+
+    <!-- MODAL DE GRÁFICO EXPANDIDO -->
+    <div id="modal-grafico" class="hidden fixed inset-0 z-50 bg-slate-900/70 p-4 sm:p-8 items-center justify-center" onclick="if (event.target === this) fecharGraficoExpandido()">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-full flex flex-col overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+                <h3 id="titulo-grafico-expandido" class="font-bold text-slate-700 text-sm uppercase tracking-wide"></h3>
+                <button type="button" onclick="fecharGraficoExpandido()" class="text-slate-500 hover:text-red-600 transition" title="Fechar">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <p class="text-[11px] text-slate-500 mb-2">Clique em uma coluna para filtrar a tabela.</p>
+                <div class="h-[65vh]"><canvas id="canvas-grafico-expandido"></canvas></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
