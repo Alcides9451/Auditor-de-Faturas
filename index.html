@@ -850,8 +850,64 @@
             localStorage.setItem('auditor_tabelas', JSON.stringify(tabelasClientes));
         }
 
+        // Versao "enxuta" para gravar no localStorage: remove os dados pesados
+        // (planilha bruta e o espelho de todas as colunas), que sao recalculados
+        // a partir de "resultados" quando a auditoria e reaberta.
+        function prepararHistoricoParaStorage(lista, semResultados) {
+            return lista.map(item => {
+                const copia = Object.assign({}, item);
+                delete copia.rawExcelData;
+                delete copia.colunas;
+                if (semResultados) delete copia.resultados;
+                return copia;
+            });
+        }
+
+        // Grava o historico com protecao contra QuotaExceededError:
+        // 1) tenta a versao enxuta; 2) descarta os resultados dos registros mais
+        // antigos; 3) por ultimo remove registros antigos, sempre avisando o usuario.
         function salvarHistoricoLocal() {
-            localStorage.setItem('auditor_historico', JSON.stringify(historicoAuditorias));
+            const tentarGravar = (dados) => {
+                try {
+                    localStorage.setItem('auditor_historico', JSON.stringify(dados));
+                    return true;
+                } catch (e) {
+                    const semEspaco = e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22);
+                    if (!semEspaco) throw e;
+                    return false;
+                }
+            };
+
+            let dados = prepararHistoricoParaStorage(historicoAuditorias, false);
+            if (tentarGravar(dados)) return true;
+
+            // Mantem os resultados detalhados apenas das auditorias mais recentes
+            for (let manter = Math.min(5, dados.length); manter >= 0; manter--) {
+                dados = prepararHistoricoParaStorage(historicoAuditorias, false)
+                    .map((item, idx) => {
+                        if (idx < manter) return item;
+                        const copia = Object.assign({}, item);
+                        delete copia.resultados;
+                        return copia;
+                    });
+                if (tentarGravar(dados)) {
+                    alert('Espaco do navegador quase cheio: as auditorias mais antigas foram mantidas apenas como resumo.\nUse "Exportar banco" para guardar os detalhes em arquivo.');
+                    return true;
+                }
+            }
+
+            // Ultimo recurso: descartar os registros mais antigos
+            let lista = prepararHistoricoParaStorage(historicoAuditorias, true);
+            while (lista.length > 1) {
+                lista = lista.slice(0, Math.max(1, Math.floor(lista.length / 2)));
+                if (tentarGravar(lista)) {
+                    alert('Nao havia espaco suficiente no navegador. Alguns registros antigos do historico foram removidos.\nExporte o banco de auditorias para nao perder dados.');
+                    return true;
+                }
+            }
+
+            alert('Nao foi possivel salvar o historico: o armazenamento do navegador esta cheio.\nExporte o banco de auditorias e limpe o historico para continuar.');
+            return false;
         }
 
         // ===== EXPORTAR / IMPORTAR BANCO DE DADOS DE AUDITORIAS SALVAS =====
@@ -1450,7 +1506,11 @@
             };
 
             historicoAuditorias.unshift(novoRegistroHistorico);
-            salvarHistoricoLocal();
+            if (!salvarHistoricoLocal()) {
+                historicoAuditorias.shift();
+                renderHistorico();
+                return;
+            }
             salvarAuditoriaNoGoogleSheets();
             renderHistorico();
             alert(`Auditoria salva com sucesso! ${novoRegistroHistorico.totalCTRCs} registro(s)${novoRegistroHistorico.filtroAplicado ? ' (somente os dados filtrados)' : ''} com todas as colunas.`);
