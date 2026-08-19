@@ -974,27 +974,66 @@
             leitor.readAsText(arquivo, 'utf-8');
         }
 
-        async function salvarAuditoriaNoGoogleSheets() {
-            if (!auditResults || auditResults.length === 0) return;
-            const webAppUrl = "https://script.google.com/macros/s/AKfycby1K3bTCAMOcsejf13i-XZm9Wwr9PG5CLKY_2OVULu97E8t4nbjv27BpRHk0yKuvmWBwg/exec";
-            const payloadData = auditResults.map(r => ({
-                ctrc: r.ctrc,
-                numeroFatura: r.numeroFatura || '',
-                parceiro: r.parceiro,
-                vlrFreteOrigem: r.vlrFreteOrigem,
-                freteValorPlanilha: r.freteValorPlanilha,
-                statusText: r.statusText
-            }));
+        // ===== BANCO DE DADOS NO GOOGLE DRIVE (Apps Script Web App) =====
+        const DRIVE_API_URL = "https://script.google.com/macros/s/AKfycbxBv1JD9hchQ2J6BerY2kzT3oO_acATm7ogUFo6ZgTQ4PW6w1EnBUq3PhhsU1EMrV80Xg/exec";
+
+        // Envia o banco completo de auditorias (.json) para o Drive
+        async function salvarBancoNoDrive(silencioso) {
+            const pacote = {
+                tipo: 'auditor-banco-historico',
+                versao: 1,
+                atualizadoEm: new Date().toISOString(),
+                total: historicoAuditorias.length,
+                historico: prepararHistoricoParaStorage(historicoAuditorias, false)
+            };
 
             try {
-                await fetch(webAppUrl, {
+                const resposta = await fetch(DRIVE_API_URL, {
                     method: 'POST',
-                    mode: 'no-cors',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payloadData)
+                    body: JSON.stringify(pacote)
                 });
+                const texto = await resposta.text();
+                let dados = {};
+                try { dados = JSON.parse(texto); } catch (e) {}
+                if (!resposta.ok || dados.status === 'erro') {
+                    throw new Error(dados.mensagem || `HTTP ${resposta.status}: ${texto.slice(0, 200)}`);
+                }
+                if (!silencioso) console.log('Banco salvo no Drive. Arquivo:', dados.id);
+                return true;
             } catch (error) {
-                console.error("Erro ao conectar com a planilha:", error);
+                console.error("Erro ao salvar no Drive:", error);
+                if (!silencioso) alert('A auditoria foi salva neste navegador, mas não foi possível gravar o banco no Drive.\n\nDetalhe: ' + error.message);
+                return false;
+            }
+        }
+
+        // Busca o banco de auditorias gravado no Drive
+        async function carregarBancoDoDrive(silencioso) {
+            try {
+                const resposta = await fetch(DRIVE_API_URL, { method: 'GET', redirect: 'follow' });
+                const texto = await resposta.text();
+                let dados;
+                try { dados = JSON.parse(texto); }
+                catch (e) { throw new Error('Resposta inválida do servidor.'); }
+                if (dados.status === 'erro') throw new Error(dados.mensagem || 'Erro no servidor.');
+                if (dados.status === 'vazio') {
+                    if (!silencioso) alert('Ainda não existe banco de auditorias no Drive.');
+                    return false;
+                }
+                const lista = Array.isArray(dados) ? dados : (Array.isArray(dados.historico) ? dados.historico : null);
+                if (!lista) throw new Error('O arquivo do Drive não contém um banco de auditorias.');
+                historicoAuditorias = lista;
+                salvarHistoricoLocal();
+                renderHistorico();
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                if (!silencioso) alert(`${lista.length} auditoria(s) carregada(s) do Drive.`);
+                return true;
+            } catch (error) {
+                console.error("Erro ao carregar do Drive:", error);
+                if (!silencioso) alert('Não foi possível carregar o banco do Drive.\n\nDetalhe: ' + error.message);
+                return false;
             }
         }
 
@@ -1511,7 +1550,7 @@
                 renderHistorico();
                 return;
             }
-            salvarAuditoriaNoGoogleSheets();
+            salvarBancoNoDrive(false);
             renderHistorico();
             alert(`Auditoria salva com sucesso! ${novoRegistroHistorico.totalCTRCs} registro(s)${novoRegistroHistorico.filtroAplicado ? ' (somente os dados filtrados)' : ''} com todas as colunas.`);
         }
@@ -1621,7 +1660,7 @@
             if (confirm("Tem certeza que deseja apagar?")) {
                 historicoAuditorias = historicoAuditorias.filter(h => h.id !== id);
                 salvarHistoricoLocal();
-                salvarAuditoriaNoGoogleSheets();
+                salvarBancoNoDrive(true);
                 renderHistorico();
             }
         }
