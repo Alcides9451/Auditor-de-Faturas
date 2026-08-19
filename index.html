@@ -1621,12 +1621,42 @@
             lucide.createIcons();
         }
 
+        function chaveLinhaAcumulada(row) {
+            return [
+                String(row['CTRC'] ?? row['Nº CTRC'] ?? row['NUMERO'] ?? ''),
+                String(row['NUMERO FATURA'] ?? row['Nº FATURA'] ?? row['FATURA'] ?? '')
+            ].join('|').trim();
+        }
+
         function carregarAuditoriaHistorico(id) {
             const item = historicoAuditorias.find(h => h.id === id);
             if (!item) return;
 
-            rawExcelData = item.rawExcelData || [];
-            auditResults = item.resultados || [];
+            // Acumula os dados da auditoria aberta com os já presentes na aba de Importação
+            const novasLinhas = item.rawExcelData || [];
+            const novosResultados = item.resultados || [];
+
+            const baseLinhas = Array.isArray(rawExcelData) ? rawExcelData.slice() : [];
+            const chavesExistentes = new Set(baseLinhas.map(chaveLinhaAcumulada));
+            novasLinhas.forEach(row => {
+                const k = chaveLinhaAcumulada(row);
+                if (!k || !chavesExistentes.has(k)) {
+                    chavesExistentes.add(k);
+                    baseLinhas.push(row);
+                }
+            });
+            rawExcelData = baseLinhas;
+
+            const baseResultados = Array.isArray(auditResults) ? auditResults.slice() : [];
+            const chavesResultados = new Set(baseResultados.map(r => String(r.ctrc ?? '') + '|' + String(r.numeroFatura ?? '')));
+            novosResultados.forEach(r => {
+                const k = String(r.ctrc ?? '') + '|' + String(r.numeroFatura ?? '');
+                if (!chavesResultados.has(k)) {
+                    chavesResultados.add(k);
+                    baseResultados.push(r);
+                }
+            });
+            auditResults = baseResultados;
 
             if (tabelasClientes[item.cliente]) {
                 selecionarClienteAuditoria(item.cliente);
